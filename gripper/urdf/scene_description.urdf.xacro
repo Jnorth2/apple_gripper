@@ -49,14 +49,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file:///home/aliclara/ros2_ws/src/apple_gripper/gripper/meshes/collision/UR5_big_table.STL" scale="0.001 0.001 0.001"/>
+        <mesh filename="package://gripper/meshes/collision/UR5_big_table.STL" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="grey"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file:///home/aliclara/ros2_ws/src/apple_gripper/gripper/meshes/collision/UR5_big_table.STL" scale="1.0 1.0 1.0"/>
+        <mesh filename="package://gripper/meshes/collision/UR5_big_table.STL" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -65,14 +65,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file:///home/aliclara/ros2_ws/src/apple_gripper/gripper/meshes/collision/UR5_small_table.STL" scale="0.001 0.001 0.001"/>
+        <mesh filename="package://gripper/meshes/collision/UR5_small_table.STL" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="grey"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file:///home/aliclara/ros2_ws/src/apple_gripper/gripper/meshes/collision/UR5_small_table.STL" scale="0.001 0.001 0.001"/>
+        <mesh filename="package://gripper/meshes/collision/UR5_small_table.STL" scale="0.001 0.001 0.001"/>
       </geometry>
     </collision>
   </link>
@@ -81,14 +81,14 @@
     <visual>
       <origin xyz="-0.11498 0.7701 0" rpy="0 0 -1.5708"/>
       <geometry>
-        <mesh filename="file:///home/aliclara/ros2_ws/src/apple_gripper/gripper/meshes/visual/apple_proxy_visual.STL" scale="0.001 0.001 0.001"/>
+        <mesh filename="package://gripper/meshes/visual/apple_proxy_visual.STL" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="orange"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file:///home/aliclara/ros2_ws/src/apple_gripper/gripper/meshes/collision/apple_proxy_collision.STL" scale="0.001 0.001 0.001"/>
+        <mesh filename="package://gripper/meshes/collision/apple_proxy_collision.STL" scale="0.001 0.001 0.001"/>
       </geometry>
     </collision>
   </link>
@@ -97,14 +97,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file:///home/aliclara/ros2_ws/src/apple_gripper/gripper/meshes/visual/Gripper_Suction.STL" scale="0.001 0.001 0.001"/>
+        <mesh filename="package://gripper/meshes/visual/Gripper_Suction.STL" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="blue"/>
     </visual>
       <collision>
       <origin xyz="0 0 0" rpy="-1.5708 0 0"/>
       <geometry>
-        <mesh filename="file:///home/aliclara/ros2_ws/src/apple_gripper/gripper/meshes/collision/Gripper_Suction_collision.STL" scale="0.001 0.001 0.001"/>
+        <mesh filename="package://gripper/meshes/collision/Gripper_Suction_collision.STL" scale="0.001 0.001 0.001"/>
       </geometry>
     </collision>
   </link>

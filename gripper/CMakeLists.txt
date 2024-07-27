@@ -5,6 +5,9 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+#gripper_msgs_DIR(~/ros2_ws/install/gripper_msgs/share/gripper_msgs/cmake)
+
+
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
@@ -41,12 +44,16 @@ install(PROGRAMS
   gripper/user.py
   gripper/suction_gripper.py
   gripper/arm_control.py
+  gripper/read_serial.py
+  gripper/psuedo_main.py
+  gripper/visualize_bags.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
 # install launch files
 install(DIRECTORY
     launch
+    config
     DESTINATION share/${PROJECT_NAME}
 )
 
@@ -79,5 +86,6 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
+
 
 ament_package()

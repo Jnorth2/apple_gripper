@@ -72,7 +72,7 @@ def launch_setup(context, *args, **kwargs):
     moveit_config_file = "ur.srdf.xacro"
 
     # visualization
-    rviz_config_file = PathJoinSubstitution([FindPackageShare(description_package), "config", "rviz_world_config.rviz"])
+    rviz_config_file = PathJoinSubstitution([FindPackageShare(description_package), "config", "world_config.rviz"])
     launch_rviz = "true"
 
     # Robot and scene description configuration

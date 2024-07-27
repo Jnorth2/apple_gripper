@@ -16,6 +16,7 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/GripperVacuum.srv"
   "srv/GripperFingers.srv"
+  "srv/GripperMultiplexer.srv"
   "srv/MoveArm.srv"
   "srv/SetArmGoal.srv"
   "srv/GetArmPosition.srv"

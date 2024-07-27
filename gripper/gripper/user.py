@@ -6,7 +6,7 @@
 # ROS imports
 import rclpy
 from rclpy.node import Node
-from gripper_msgs.srv import GripperFingers, GripperVacuum, SetArmGoal, GetArmPosition
+from gripper_msgs.srv import GripperFingers, GripperVacuum, GripperMultiplexer, SetArmGoal, GetArmPosition
 from visualization_msgs.msg import Marker
 from rcl_interfaces.msg import ParameterDescriptor
 
@@ -18,6 +18,9 @@ import matplotlib.pyplot as plt
 import time
 import yaml
 import os
+import subprocess
+import datetime
+import signal
 
 def validate_user_input(input_str: str, val_str_list) -> str:
     """Helper function for validating user input. Checks if a given input from the
@@ -42,6 +45,10 @@ class User(Node):
         self.fingers_service_client = self.create_client(GripperFingers, 'set_fingers_status')
         self.get_logger().info("Waiting for gripper finger server")
         self.fingers_service_client.wait_for_service()
+
+        self.multiplexer_service_client = self.create_client(GripperMultiplexer, 'set_multiplexer_status')
+        self.get_logger().info("Waiting for multiplexer server")
+        self.multiplexer_service_client.wait_for_service()
 
         self.get_pos_service_client = self.create_client(GetArmPosition, 'get_arm_position')
         self.get_logger().info("Waiting for position server")
@@ -94,7 +101,7 @@ class User(Node):
         """Method that runs through the sequence to use the apple proxy"""
         
         # specify the trial parameters
-        roll_points = 2
+        roll_points = 1
         self.generate_roll_values(roll_points)
         yaw_values = [0] # degrees
         offset_values = [5/1000] # meters
@@ -136,8 +143,23 @@ class User(Node):
 
                             if move_check == "skip this trial":
                                 break
+                        
+                        # start publishing multiplexer topics
+                        self.send_multiplexer_request(multiplexer_status=True)
+                        self.get_logger().info("Multiplexing...")
 
                         # start rosbag recording
+                        rosbag_number = 1
+                        while os.path.exists('bags/' + self.datetime_simplified() + "_" + str(rosbag_number)):
+                            rosbag_number += 1
+                        self.get_logger().info("Starting rosbag")
+                        file_name = 'bags/' + self.datetime_simplified() + "_" + str(rosbag_number)
+                        topics = ['/gripper/distance', '/gripper/pressure/sc1', '/gripper/pressure/sc2', '/gripper/pressure/sc3', '/gripper/motor/current', '/gripper/motor/position', '/gripper/motor/velocity', '/gripper/camera']
+                        cmd = 'ros2 bag record -o ' + file_name + ' ' + ' '.join(topics)
+                        pro = subprocess.Popen(cmd, stdout=subprocess.PIPE, stdin=subprocess.PIPE,
+                                        shell=True, preexec_fn=os.setsid) 
+                        time.sleep(5)
+
                         # add noise, if using
 
                         # apply offset_value - ARM
@@ -162,6 +184,7 @@ class User(Node):
                         if self.actuation_mode == "fingers" or self.actuation_mode == "dual":
                             self.send_fingers_request(fingers_status=True)
                             self.get_logger().info("Fingers engaged")
+                            time.sleep(10)
 
                         # move away from apple - ARM
                         self.get_logger().info("Retrieving the apple")
@@ -181,10 +204,20 @@ class User(Node):
                         self.send_vacuum_request(vacuum_status=False)
                         self.get_logger().info("Gripper vacuum off")
 
+                        time.sleep(5)
+
                         # stop rosbag recording
+                        os.killpg(os.getpgid(pro.pid), signal.SIGTERM)
+                        time.sleep(2)
+                        self.get_logger().info("Rosbag stopped")
+
+                        # stop multiplexing
+                        self.send_multiplexer_request(multiplexer_status=False)
+                        self.get_logger().info("Not multiplexing...")
+
 
                         # save metadata
-                        self.save_metadata()
+                        self.save_metadata(file_name + '/moremetadata.yaml')
 
     ##  ------------- SERVICE CLIENT CALLS ------------- ##
     def send_vacuum_request(self, vacuum_status):
@@ -206,6 +239,16 @@ class User(Node):
         request.set_fingers = fingers_status
         # make the service call (asynchronously)
         self.fingers_response = self.fingers_service_client.call_async(request)
+
+    def send_multiplexer_request(self, multiplexer_status):
+        """Function to call gripper fingers service.
+            Inputs - fingers_status (bool): True engages the fingers, False disengages
+        """
+        # build the request
+        request = GripperMultiplexer.Request()
+        request.set_multiplexer = multiplexer_status
+        # make the service call (asynchronously)
+        self.multiplexer_response = self.multiplexer_service_client.call_async(request)
 
     def send_arm_request(self, ee_location, ee_orientation=[0.0,0.0,0.0,1.0], ee_frame="world", move_cartesian=False):
         """Method to call arm service.
@@ -458,6 +501,19 @@ class User(Node):
 
         with open ("config/"+file_name, 'w') as yaml_file:
             yaml.dump(d, yaml_file, default_flow_style=False, sort_keys=False)
+    
+    def datetime_simplified(self):
+        """Convenient method to adapt datetime for file naming convention"""
+        year = datetime.datetime.now().year
+        month = datetime.datetime.now().month
+        day = datetime.datetime.now().day
+        hour = datetime.datetime.now().hour
+        minute = datetime.datetime.now().minute
+
+        day = str(year) + str(month//10) + str(month%10) + str(day)
+        time = str(hour//10) + str(hour%10) + str(minute//10) + str(minute%10)
+
+        return(day)
         
 def main(args=None):
     # initialize rclpy

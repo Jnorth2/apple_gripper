@@ -53,4 +53,11 @@ def generate_launch_description():
         executable='arm_control.py',
     ))
     
+    # Launch the camera publisher
+    ld.add_action(Node(
+    	package='opencv_tools',
+    	executable='img_pub',
+    ))
+    
+    
     return ld
