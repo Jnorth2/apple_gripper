@@ -1,3 +1,4 @@
+#This visualizes data from Trial2 of fingertip force data.
 #This file must be run from this folder, or change the paths to the data
 
 import matplotlib.pyplot as plt

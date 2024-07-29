@@ -1,3 +1,6 @@
+#This visualizes data from the fingertip force test for a 75mm sphere
+#This file must be run from this folder, or change the paths to the data
+
 from pathlib import Path
 
 from rosbags.highlevel import AnyReader

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # This node interacts with the user, starts the selected pick sequence,
-    # and saves the appropirate metadata. This is the main script for using the gripper.
+    # and saves the appropirate metadata as well as ros bags. This is the main script for using the gripper.
 
 # ROS imports
 import rclpy
@@ -144,21 +144,22 @@ class User(Node):
                             if move_check == "skip this trial":
                                 break
                         
-                        # start publishing multiplexer topics
+                        # start publishing multiplexer topics (suction cups, distance, motor feedback)
                         self.send_multiplexer_request(multiplexer_status=True)
                         self.get_logger().info("Multiplexing...")
 
-                        # start rosbag recording
+                        # start rosbag recording (edit topics array to enable/disable camera recording)
                         rosbag_number = 1
-                        while os.path.exists('bags/' + self.datetime_simplified() + "_" + str(rosbag_number)):
+                        while os.path.exists('/apple_gripper/gripper/data/bags/' + self.datetime_simplified() + "_" + str(rosbag_number)):
                             rosbag_number += 1
                         self.get_logger().info("Starting rosbag")
-                        file_name = 'bags/' + self.datetime_simplified() + "_" + str(rosbag_number)
+                        file_name = '/apple_gripper/gripper/data/bags/' + self.datetime_simplified() + "_" + str(rosbag_number)
                         topics = ['/gripper/distance', '/gripper/pressure/sc1', '/gripper/pressure/sc2', '/gripper/pressure/sc3', '/gripper/motor/current', '/gripper/motor/position', '/gripper/motor/velocity', '/gripper/camera']
                         cmd = 'ros2 bag record -o ' + file_name + ' ' + ' '.join(topics)
                         pro = subprocess.Popen(cmd, stdout=subprocess.PIPE, stdin=subprocess.PIPE,
                                         shell=True, preexec_fn=os.setsid) 
                         time.sleep(5)
+                        #These sleeps are used to time events. These will eventually be replaced with feedback from the gripper sensors
 
                         # add noise, if using
 
@@ -177,7 +178,7 @@ class User(Node):
                         self.get_logger().info(f"Sending goal to arm: {apple_approach_position}, {starting_orientation}")
                         self.send_arm_request(ee_location=apple_approach_position, ee_orientation=starting_orientation, move_cartesian=True)
                         
-                        # manually label cup engagement
+                        # manually label cup engagement (will eventually be replaced with pressure sensor feedback and pressure differential servoing)
                         self.label_suction_cups()
 
                         # engage fingers - GRIPPER
@@ -196,6 +197,7 @@ class User(Node):
                     
                         # manually label apple pick
                         self.label_apple_pick()
+
                         # disengage fingers - GRIPPER
                         if self.actuation_mode == "fingers" or self.actuation_mode == "dual":
                             self.send_fingers_request(fingers_status=False)
@@ -218,6 +220,7 @@ class User(Node):
 
                         # save metadata
                         self.save_metadata(file_name + '/moremetadata.yaml')
+                        # TODO - maybe combine this file with the rosbag metadata file?
 
     ##  ------------- SERVICE CLIENT CALLS ------------- ##
     def send_vacuum_request(self, vacuum_status):
@@ -242,7 +245,7 @@ class User(Node):
 
     def send_multiplexer_request(self, multiplexer_status):
         """Function to call gripper fingers service.
-            Inputs - fingers_status (bool): True engages the fingers, False disengages
+            Inputs - fingers_status (bool): True publishes the data, false does not
         """
         # build the request
         request = GripperMultiplexer.Request()

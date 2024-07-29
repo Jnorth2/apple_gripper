@@ -98,6 +98,7 @@ void setup() {
   while (!Serial);
   clearInputBuffer();
 
+  // Run initilization sequence to find zero position
   zeroPosition();
 
   delay(1000);
@@ -126,11 +127,14 @@ void zeroPosition() {
 
 
 void loop() {
-
+  //look for command
   recvWithStartEndMarker();
+
+  //excecute command
   parseCommands();
 
-  //switch to current mode when grasping
+
+  //this is for precise control of fingers when grasping
   if (movingUp && dxl.getPresentPosition(DXL_ID, UNIT_DEGREE)<closedPos){
     dxl.torqueOff(DXL_ID);
     dxl.setOperatingMode(DXL_ID, OP_CURRENT); // Set to current mode
@@ -140,10 +144,11 @@ void loop() {
     currentControlGrasp = true;
   }
   if(currentControlGrasp){
-    //sets the current to desired current for different sized apples
+    //sets the current to desired current for different sized apples. at 90mm: 125 mA, at 70mm: 75mA. Linear between them
     dxl.setGoalCurrent(DXL_ID, currentFunction(dxl.getPresentPosition(DXL_ID, UNIT_DEGREE)), UNIT_MILLI_AMPERE);
   }
 
+  //print data to the serial
   if(muxBool){
     multiplex();
   }
@@ -241,6 +246,7 @@ void engageFingers(){
 }
 
 void disengageFingers(){
+  //Disengages the fingers by setting the servo to the open position
   Serial.println("Arduino: disengaging fingers");
   
   dxl.torqueOff(DXL_ID);
@@ -254,11 +260,13 @@ void disengageFingers(){
 }
 
 void engageMultiplexer(){
+  //start publishing data
   Serial.println("Arduino: engage multiplexer");
   muxBool = true;
 }
 
 void disengageMultiplexer(){
+  //stop publishing data
   Serial.println("Arduino: disengage multiplexer");
   muxBool = false;
 }
@@ -281,6 +289,7 @@ void clearInputBuffer() {
 }
 
 void multiplex() {
+  //loop through the multiplexor sensors and print their data. Also print data from the motor
 
   //variables for sensor measurements
   unsigned long currentMillis;
@@ -328,7 +337,8 @@ void multiplex() {
 }
 
 int currentFunction(int position){
-  //helper fuction to determine desired current for different sized apples
+  //helper fuction to determine desired current for different sized apples. For a 90 mm diameter apple, use 125mA. Decrease to 75mA when grasping 70mm apple.
+  //this is due to the mechanical advantage of the gripper changing as the gripper closes
   int current = 125 - ((float(closed90mm - position)) / (float(closed90mm - closed70mm))) * 50;
   Serial.println(current);
   if(current>125){

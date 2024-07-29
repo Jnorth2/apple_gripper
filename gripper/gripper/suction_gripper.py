@@ -42,11 +42,10 @@ class SuctionGripper(Node):
         try:
             self.my_serial = serial.Serial(arduino_port, baud)
             self.get_logger().info(f"Connected to serial port {arduino_port}")
-            self.real_arduino_flag = True
-            self.timer = self.create_timer(0.1, self.timer_callback) #to read the sensors
+            self.timer = self.create_timer(0.1, self.timer_callback) #to continuously read the sensors
         except SerialException as e:
-            self.get_logger().info(f"Could not connect to serial port {arduino_port}. Using fake arduino hardware.")
-            self.real_arduino_flag = False
+            self.get_logger().info(f"Could not connect to serial port {arduino_port}.")
+            print(e)
             # self.get_logger().info(e)
             
         # class variables
@@ -61,10 +60,11 @@ class SuctionGripper(Node):
     
 
     def timer_callback(self):
+        """read all of the messages in the serial"""
         while self.my_serial.in_waiting:
             line = self.my_serial.readline().decode('utf-8')[0:][:-2]
 
-            # if it has a tag to be published line ex. [Ch2]
+            # if it has a tag to be published. For example: [Ch2]
             if re.search("\[Ch[0-9]*?\]", line):
 
                 #extract tag and channel from message
@@ -91,17 +91,14 @@ class SuctionGripper(Node):
         if request.set_vacuum:
             # if we're actually connected to an arduino, send the serial message. Otherwise just pretend
             self.get_logger().info("Sending request: gripper vacuum on")
-            if self.real_arduino_flag:
-                msg_str = self.start_character+self.vacuum_on_command+self.end_character
-                self.my_serial.write(str(msg_str).encode())
-                # self.read_serial()
+            msg_str = self.start_character+self.vacuum_on_command+self.end_character
+            self.my_serial.write(str(msg_str).encode())
+            
         # if the request is False, turn the vacuum off
         elif not request.set_vacuum:
             self.get_logger().info("Sending request: gripper vacuum off")
-            if self.real_arduino_flag:
-                msg_str = self.start_character+self.vacuum_off_command+self.end_character
-                self.my_serial.write(str(msg_str).encode())
-                # self.read_serial()
+            msg_str = self.start_character+self.vacuum_off_command+self.end_character
+            self.my_serial.write(str(msg_str).encode())
 
         response.result = True
         return response
@@ -114,17 +111,14 @@ class SuctionGripper(Node):
         if request.set_fingers:
             # like above, if we're actually connected to an arduino, send the serial message. Otherwise just pretend
             self.get_logger().info("Sending request: engage fingers")
-            if self.real_arduino_flag:
-                msg_str = self.start_character+self.fingers_engaged_command+self.end_character
-                self.my_serial.write(str(msg_str).encode())
-                # self.read_serial()
+            msg_str = self.start_character+self.fingers_engaged_command+self.end_character
+            self.my_serial.write(str(msg_str).encode())
+
         # if the request is False, disengage the fingers
         elif not request.set_fingers:
             self.get_logger().info("Sending request: disengage fingers")
-            if self.real_arduino_flag:
-                msg_str = self.start_character+self.fingers_disengaged_command+self.end_character
-                self.my_serial.write(str(msg_str).encode())
-                # self.read_serial()
+            msg_str = self.start_character+self.fingers_disengaged_command+self.end_character
+            self.my_serial.write(str(msg_str).encode())
 
         response.result = True
         return response
@@ -133,24 +127,20 @@ class SuctionGripper(Node):
     def multiplexer_service_callback(self, request, response):
         """Callback function for the multiplexer service. Uses the bool stored in set_multiplexer
             to engage or disengage the grippers. This might be better as an action.
+            This also controls when the motor feedback is publishing.
         """
         # if the request is True, engage the multiplexer
         if request.set_multiplexer:
             # like above, if we're actually connected to an arduino, send the serial message. Otherwise just pretend
             self.get_logger().info("Sending request: begin multiplexing")
-            if self.real_arduino_flag:
-                msg_str = self.start_character+self.multiplexer_on_command+self.end_character
-                self.my_serial.write(str(msg_str).encode())
-                #read once as usual and once for each sensor
-                # for i in range(5):
-                    # self.read_serial()
+            msg_str = self.start_character+self.multiplexer_on_command+self.end_character
+            self.my_serial.write(str(msg_str).encode())
+        
         # if the request is False, disengage the multiplexer
         elif not request.set_multiplexer:
             self.get_logger().info("Sending request: end multiplexing")
-            if self.real_arduino_flag:
-                msg_str = self.start_character+self.multiplexer_off_command+self.end_character
-                self.my_serial.write(str(msg_str).encode())
-                # self.read_serial()
+            msg_str = self.start_character+self.multiplexer_off_command+self.end_character
+            self.my_serial.write(str(msg_str).encode())
 
         response.result = True
         return response

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+# This visualizes data from the bag files saved by user.py. 
 
 from pathlib import Path
 
@@ -35,8 +36,8 @@ timestamps = [sc1_ts, sc2_ts, sc3_ts, dist_ts, current_ts, position_ts, velocity
 
 initial_time = 0
 
-# create reader instance and open for reading
-with AnyReader([Path('/home/jacob/ros_ws/src/apple_gripper/gripper/bags/20240717_1')], default_typestore=typestore) as reader:
+# create reader instance and open for reading - Edit this path to look at different bags.
+with AnyReader([Path('apple_gripper/gripper/data/bags/20240717_1')], default_typestore=typestore) as reader:
 
     for connection, timestamp, rawdata in reader.messages(connections=reader.connections):
         #collect initial time

@@ -1,3 +1,4 @@
+#This visualizes data from Trial1 of force data. This is now out of date.
 #This file must be run from this folder, or change the paths to the data
 
 import matplotlib.pyplot as plt

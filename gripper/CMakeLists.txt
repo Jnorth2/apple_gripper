@@ -44,8 +44,6 @@ install(PROGRAMS
   gripper/user.py
   gripper/suction_gripper.py
   gripper/arm_control.py
-  gripper/read_serial.py
-  gripper/psuedo_main.py
   gripper/visualize_bags.py
   DESTINATION lib/${PROJECT_NAME}
 )
