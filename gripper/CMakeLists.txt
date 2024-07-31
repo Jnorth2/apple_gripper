@@ -17,6 +17,8 @@ find_package(gripper_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(moveit_msgs REQUIRED)
+find_package(gripper_msgs REQUIRED)
+
 
 # include cpp "include" directory
 include_directories(include)

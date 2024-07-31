@@ -8,8 +8,8 @@ pressure sensor 2 is on B
 pressure sensor 3 is on A
 
 fingers closed servo positions:
-70mm: -2220
-90mm: -2045
+70mm: -2044
+90mm: -1905
 
 Jacob Karty
 6/11/2024
@@ -54,10 +54,10 @@ int dataNumber = 0;
 // variables for servo movements
 boolean movingUp = false;
 boolean currentControlGrasp = false;
-const int openPos = 0;
-const int closedPos = -1900;
-const int closed90mm = -2045;
-const int closed70mm = -2200;
+const int openPos = 75;
+const int closedPos = -1850;
+const int closed90mm = -1905;
+const int closed70mm = -2044;
 
 boolean muxBool = false; //to multiplex or not to multiplex
 
@@ -340,7 +340,6 @@ int currentFunction(int position){
   //helper fuction to determine desired current for different sized apples. For a 90 mm diameter apple, use 125mA. Decrease to 75mA when grasping 70mm apple.
   //this is due to the mechanical advantage of the gripper changing as the gripper closes
   int current = 125 - ((float(closed90mm - position)) / (float(closed90mm - closed70mm))) * 50;
-  Serial.println(current);
   if(current>125){
     current=125;
   }
