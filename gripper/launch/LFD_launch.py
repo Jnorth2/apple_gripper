@@ -6,6 +6,7 @@ from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from launch.substitutions import PathJoinSubstitution
 
+
 def generate_launch_description():
     ld = LaunchDescription()
     
@@ -58,6 +59,19 @@ def generate_launch_description():
     	package='ros2_camera_publish',
     	executable='execute',
     ))
+
+    # Launch the force torque sensor
+    ld.add_action(Node(
+        package='gripper',
+        executable='force_torque_sensor.py'
+    ))
+
+    # Launch the arduino with imu
+    ld.add_action(Node(
+        package='gripper',
+        executable='IMU_serial.py'
+    ))
+
     
     
     return ld

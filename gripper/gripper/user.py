@@ -153,7 +153,7 @@ class User(Node):
                         while os.path.exists('/apple_gripper/gripper/data/bags/' + self.datetime_simplified() + "_" + str(rosbag_number)):
                             rosbag_number += 1
                         self.get_logger().info("Starting rosbag")
-                        file_name = '/apple_gripper/gripper/data/bags/' + self.datetime_simplified() + "_" + str(rosbag_number)
+                        file_name = '/apple_gripper/gripper/data/bags/arm' + self.datetime_simplified() + "_" + str(rosbag_number)
                         topics = ['/gripper/distance', '/gripper/pressure/sc1', '/gripper/pressure/sc2', '/gripper/pressure/sc3', '/gripper/motor/current', '/gripper/motor/position', '/gripper/motor/velocity', '/gripper/camera']
                         cmd = 'ros2 bag record -o ' + file_name + ' ' + ' '.join(topics)
                         pro = subprocess.Popen(cmd, stdout=subprocess.PIPE, stdin=subprocess.PIPE,

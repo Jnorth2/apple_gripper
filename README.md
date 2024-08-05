@@ -79,9 +79,7 @@ If you get an error `Could not find a package configuration file provided by "gr
 
 ## Connecting the in hand camera
 
-The in hand camera connects directly to the computer through a usb cord and requires its own package to operate. Follow instructions [here](https://medium.com/@kabilankb2003/integrating-pi-camera-with-ros-2-humble-on-nvidia-jetson-nano-using-opencv-de676dd6a2ca). Rename the topic publisher name to `/gripper/camera`.
-
-If you choose to use a different package with more functionality, again rename the topic publisher to `/gripper/camera`. Also, make sure to edit the launch file `gripper/launch/suction_gripper_launch.py` to launch the publisher.
+The in hand camera connects directly to the computer through a usb cord and requires its own package to operate. Follow instructions [here](https://github.com/ANI717/ros2_camera_publish). Rename the topic publisher name to `/gripper/camera`.
 
 ## Testing
 

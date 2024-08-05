@@ -47,6 +47,9 @@ install(PROGRAMS
   gripper/suction_gripper.py
   gripper/arm_control.py
   gripper/visualize_bags.py
+  gripper/force_torque_sensor.py
+  gripper/LFD.py
+  gripper/IMU_serial.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
