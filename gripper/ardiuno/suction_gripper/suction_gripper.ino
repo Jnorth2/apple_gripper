@@ -59,7 +59,7 @@ const int closedPos = -1850;
 const int closed90mm = -1905;
 const int closed70mm = -2044;
 
-boolean muxBool = false; //to multiplex or not to multiplex
+boolean muxBool = true; //to multiplex or not to multiplex
 
 using namespace ControlTableItem;   //This namespace is required to use Control table item names
 
@@ -310,11 +310,12 @@ void multiplex() {
       pressure_hPa = mpr.readPressure();  
 
       //Print the time in ms just to have an idea of long the sensor takes to measure press.
-      Serial.println("[Ch" + String(i) +"] " + "Period: " + String(millis() - currentMillis) + " ms, " + "Pressure: " + String(pressure_hPa) + " hPa");     
+      Serial.print("[Ch" + String(i) +"] " + "Period: " + String(millis() - currentMillis) + " ms, " + "Pressure: " + String(pressure_hPa) + " hPa");     
     }
 
     // ... and then measure Distance in the fourth channel
     else {
+      Serial.println();
       lox.rangingTest(&measure, false); // pass in 'true' to get debug data printout!
 
       if (measure.RangeStatus != 4) {  // phase failures have incorrect data

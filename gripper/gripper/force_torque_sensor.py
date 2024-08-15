@@ -2,7 +2,7 @@
 
 # This file creates a ROS node to continuously read data from the serial of a
 # M4313M2B 6 axis force torque sensor, and it publishes that data as a ROS topic.
-#The format is a Twist, with <Fx, Fy, Fz>, <Mx, My, Mz>
+#The format is a Twist, with <Fx, Fy, Fz>, <Mx, My, Mz>. The units are N and NM
 
 #Jacob Karty
 #8/2/2024
@@ -25,7 +25,7 @@ class ForceTorque(Node):
 
 
         #connect to serial
-        ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)
+        ser = serial.Serial('/dev/ttyUSB1', 115200, timeout=1)
 
         #request for continuous packets of data. 'AT+GOD\r\n' requests for one packet
         ser.write('AT+GSD\r\n'.encode(encoding="ascii"))
@@ -43,7 +43,7 @@ class ForceTorque(Node):
                     break
             packet = ser.read(29).hex() # read in the rest of the packet
             data = self.parse_data(packet) # parse the data into forces
-            if data != False: #if the data is read correctly
+            if data: #if the data is read correctly
                 msg = Twist()
                 msg.linear.x = data[0]
                 msg.linear.y = data[1]

@@ -8,6 +8,7 @@ import rclpy
 from rclpy.node import Node
 from gripper_msgs.srv import GripperVacuum, GripperFingers, GripperMultiplexer
 from std_msgs.msg import String  # or a custom message type
+from std_msgs.msg import Float32MultiArray
 
 # standard imports
 import numpy as np
@@ -21,14 +22,12 @@ class SuctionGripper(Node):
         super().__init__("suction_gripper")
 
         # set up the publishers
-        publisher_sc1 = self.create_publisher(String, '/gripper/pressure/sc1', 10)
-        publisher_sc2 = self.create_publisher(String, '/gripper/pressure/sc2', 10)
-        publisher_sc3 = self.create_publisher(String, '/gripper/pressure/sc3', 10)
+        publisher_sc = self.create_publisher(Float32MultiArray, '/gripper/pressure', 10)
         publisher_dist = self.create_publisher(String, '/gripper/distance', 10)
         publisher_current = self.create_publisher(String, '/gripper/motor/current', 10)
         publisher_pos = self.create_publisher(String, '/gripper/motor/position', 10)
         publisher_vel = self.create_publisher(String, '/gripper/motor/velocity', 10)
-        self.publisher_list = [publisher_sc1, publisher_sc2, publisher_sc3, publisher_dist,
+        self.publisher_list = [publisher_sc, publisher_dist,
                                publisher_current, publisher_pos, publisher_vel]
 
         # set up the services
@@ -72,10 +71,17 @@ class SuctionGripper(Node):
                 channel = int(tag.group(0)[3:-1])
 
                 #publish to the correct topic
-                publisher = self.publisher_list[channel]
-                msg = String()
-                msg.data = line
-                publisher.publish(msg)
+                if(channel>2):
+                    publisher = self.publisher_list[channel-2]
+                    msg = String()
+                    msg.data = line
+                    publisher.publish(msg)
+                if(channel == 0):
+                    publisher = self.publisher_list[0]
+                    msg = Float32MultiArray
+                    matches = re.findall('\d+', line)
+                    data = [float(matches[2]), float(matches[5]), float(matches[8])]
+                    publisher.publish(Float32MultiArray(data=data))
 
             # if it does not have a tag it is user feedback and printed
             else:

@@ -15,7 +15,6 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55);
 void setup(void) 
 {
   Serial.begin(9600);
-  Serial.println("Orientation Sensor Test"); Serial.println("");
   
   /* Initialise the sensor */
   if(!bno.begin())
@@ -32,17 +31,17 @@ void setup(void)
 
 void loop(void) 
 {
-  /* Get a new sensor event */ 
-  sensors_event_t event; 
-  bno.getEvent(&event);
-  
-  /* Display the floating point data */
-  Serial.print("X: ");
-  Serial.print(event.orientation.x, 4);
-  Serial.print("    Y: ");
-  Serial.print(event.orientation.y, 4);
-  Serial.print("    Z: ");
-  Serial.print(event.orientation.z, 4);
+  imu::Quaternion quat = bno.getQuat();
+
+  /* Display the quat data */
+  Serial.print("qW: ");
+  Serial.print(quat.w(), 4);
+  Serial.print(" qX: ");
+  Serial.print(quat.x(), 4);
+  Serial.print(" qY: ");
+  Serial.print(quat.y(), 4);
+  Serial.print(" qZ: ");
+  Serial.print(quat.z(), 4);
   Serial.println("");
   
   delay(100);
