@@ -9,7 +9,7 @@ Additionally, this repository contains the data and analysis I used to create th
 Lastly, this repository also contains scripts to collect data from a human controlling the custom gripper using my custom LFD handle attachment. This attachment has a 6 axis force/torque sensor as well as OptiTrack markers to track the pose and forces. Once the data is collected, it can be aligned, played back, and visualized using scripts in this repository.
 
 <p align="center">
-  <img src="data_collection.jpg">
+  <img src="doc/data_collection.jpg">
 </p>
 
 
@@ -138,6 +138,10 @@ In another terminal run the main node and rosbag:
 Go through the pick sequence. This will save a rosbag in `/apple_gripper/lfd_data_collection/data/bags`. Then export the OptiTrack data as a csv and place it in `/apple_gripper/lfd_data_collection/data/optitrack`.
 
 ## Running the data playback sequence
+
+<p align="center">
+  <img src="doc/data_playback.jpg">
+</p>
 
 Optionally use plotjuggler to visualize the force/torque data during the playback:
 
