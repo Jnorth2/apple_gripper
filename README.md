@@ -1,18 +1,24 @@
 # Apple Picking Experiements with Apple Proxy & Custom Gripper
 
-This is a repository for the ROS2 conversion of Alejo Velasquez's ROS1 apple proxy & gripper framework. The original source code can be found at [github.com/velasale/suction-gripper](https://github.com/velasale/suction-gripper) and is listed under the MIT license.
+This is a repository to collect apple picking data that will be used for Learning From Demonstration training. This repository was build on top of Ali Clara's ROS2 conversion of Alejo Velasquez's ROS1 apple proxy and gripper framework. Ali's repository can be found here(https://github.com/ali-clara/apple_gripper.git) and is listed under the GNU GPL license and Alejo's repository can be found here(https://github.com/velasale/suction-gripper) and is listed under the MIT license.
 
-This repository contains scripts to use Alejo's custom gripper and a UR5e to run proxy apple picking tests. It uses MoveIt2 to move a UR5e end effector to sampled points around the circumference of the apple proxy and attempts a number of picks at each one. This allows us to test the effect of different variables on pick success.
+This repository contains scripts to use of Alejo's custom gripper with my custom modifications and a UR5e to run proxy apple picking tests. It uses MoveIt2 to move a UR5e end effector to sampled points around the circumference of the apple proxy and attempts a number of picks at each one. This allows us to test the effect of different variables on pick success.
+
+Additionally, this repository contains the data and analysis I used to create the variable current control for the gripper's fingers. This is in `lfd_data_collection/data/force_current`.
+
+Lastly, this repository also contains scripts to collect data from a human controlling the custom gripper using my custom LFD handle attachment. This attachment has a 6 axis force/torque sensor as well as OptiTrack markers to track the pose and forces. Once the data is collected, it can be aligned, played back, and visualized using scripts in this repository.
 
 <p align="center">
-  <img src="doc/rviz_world.png">
+  <img src="data_collection.jpg">
 </p>
 
 
 ## Packages in the Repository:
 
-- `gripper` - 
-- `gripper_msgs` - 
+- `gripper` - to control the gripper and UR5 for proxy picks
+- `gripper_msgs` - service messages for the gripper package
+- `lfd_data_collection` - to collect and playback data for learning from demonstration
+
 
 ## Getting Started:
 
@@ -43,18 +49,15 @@ This repository contains scripts to use Alejo's custom gripper and a UR5e to run
 
 - My modifications of Alejo's gripper
 
-    - A custom-built gripper tailored for picking apples. It uses suction cups and extendable fingers to grasp and pick and is controlled with an OpenRB-150.
-
-- An OpenRB 150
-
-    - This controls 3 pressure sensors, a distance sensor, as well as the servo motor. More information on setting up [here](https://emanual.robotis.com/docs/en/parts/controller/openrb-150/).
+    - A custom-built gripper tailored for picking apples. It uses suction cups and extendable fingers to grasp and pick and is controlled with an OpenRB-150, and contains sensors to aid in this.
+    -A custom-build handle for humans to control the gripper. This handle has a 6 axis force/torque sensor and OptiTrack markers to collect pose and force/torque data.
 
 
 ### Installation:
 
 Make a ROS2 workspace
 
-    mkdir ros_ws/src && cd src
+    mkdir ros_ws && cd ros_ws && mkdir src && cd src
 
 Clone this repository
 
@@ -69,37 +72,22 @@ Build the workspace
 
     colcon build --symlink-install
 
-If you get an error `Could not find a package configuration file provided by "gripper_msgs" with any of the following names:` Remove the previous build, build the `gripper_msgs`, source the `setup.bash`, then build the `gripper`.
-    
-    rm -rf build install log
-    colcon build --packages-select gripper_msgs
-    source ~/ros_ws/install/setup.bash
-    colcon build --packages-select gripper
-    source ~/ros_ws/install/setup.bash
-
 ## Connecting the in hand camera
 
-The in hand camera connects directly to the computer through a usb cord and requires its own package to operate. Follow instructions [here](https://github.com/ANI717/ros2_camera_publish). Rename the topic publisher name to `/gripper/camera`.
+The in hand camera connects directly to the computer through a usb cord and requires its own package to operate. Follow instructions [here](https://github.com/ANI717/ros2_camera_publish). Rename the publisher topic to `/gripper/camera`.
 
 ## Testing
 
-After installation, the following commands can test the functionality of different components.
+### Testing the gripper
 
-
-### RVIZ world & joint state publisher
-
-To ensure the RVIZ world loads correctly and the joint state publisher controls the UR5e joints, run:
-
-    ros2 launch gripper ur5e_launch.py
-
-This loads the following scene, showing the UR5e and apple proxy with the TF tree. It also runs the joint state publisher GUI, which controls the UR5e joint positions.
-
-<p align="center">
-  <img src="doc/rviz-joint-pub-gui.png">
-</p>
-
-
-### Suction gripper Pyserial interface
+I reccomend adding the following aliases to your .bashrc to aid with testing and debugging.	
+	
+	alias fingersOpen='ros2 service call /set_fingers_status gripper_msgs/srv/GripperFingers "{set_fingers: False}"'
+	alias fingersClose='ros2 service call /set_fingers_status gripper_msgs/srv/GripperFingers "{set_fingers: True}"'
+	alias suctionOn='ros2 service call /set_vacuum_status gripper_msgs/srv/GripperVacuum "{set_vacuum: True}"'
+	alias suctionOff='ros2 service call /set_vacuum_status gripper_msgs/srv/GripperVacuum "{set_vacuum: False}"'
+	alias muxOn='ros2 service call /set_multiplexer_status gripper_msgs/srv/GripperMultiplexer "{set_multiplexer: True}"'
+	alias muxOff='ros2 service call /set_multiplexer_status gripper_msgs/srv/GripperMultiplexer "{set_multiplexer: False}"'
 
 The `suction_gripper` node communicates with an OpenRB-150 through Pyserial to control the gripper vacuum and fingers. When it recieves a service call, it sends an integer between 1-6 corresponding to vacuum on/off, fingers engaged/disengaged, and multiplexer on/off.
 
@@ -113,32 +101,57 @@ In one shell, start the suction gripper node:
 
 In a second shell, call the gripper vacuum or fingers service, e.g:
 
-    ros2 service call /set_vacuum_status gripper_msgs/srv/GripperVacuum "{set_vacuum: True}"
+    fingersClose
 
 The first shell will log the same serial output as the test with the Arduino IDE, and the relay should again be triggered. 
 
 Next, ensure that the OpenRB-150 can publish data correctly. In the second shell, call the mulitplexer service.
 
-    ros2 service call /set_multiplexer_status gripper_msgs/srv/GripperMultiplexer "{set_multiplexer: True}"
+    muxOn
 
 Now check that the topics are publishing.
 
-    ros2 topic list
     ros2 topic echo /gripper/distance
 
-## Running the Proxy Pick sequence
+### Testing the force/torque sensor
 
-Launch the UR robot driver with fake hardware:
+Run the node that publishes force/torque data
 
-    ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur5e robot_ip:=yyy.yyy.yyy.yyy use_fake_hardware:=true launch_rviz:=false
+    ros2 run lfd_data_collection force_torque_sensor.py
 
-Launch the RVIZ world, start MoveIt2 arm control, and connect to the gripper:
+Ensure that the topic is publishing properly:
 
-    ros2 launch gripper suction_gripper_launch.py
+    ros2 topic echo gripper/force_torque
 
-Finally, run the user interface and start the pick sequence - **must be run from the `gripper` package directory**:
+## Running the data collection sequence
 
-    ros2 run gripper user.py --ros-args --params-file config/apple_proxy_parameters.yaml
+First setup OptiTrack. Ensure that there are exactly 11 markers visible (3 for the origin, 5 on the base of the handle, and one on each finger). Select the 5 markers on the base of the handle and create a rigid body with them. Then start recording data.
 
-The `user` node first prompts the user for inputs about the current experiment setup. It then asks to start the proxy pick sequence, which runs through a set number of trials at specified locations. Upon completion, it saves metadata about the trial.
+Next start the data collection sequence. In one terminal launch the data collection nodes:
+
+    ros2 launch lfd_data_collection data_collection_launch.py
+
+In another terminal run the main node and rosbag:
+
+    ros2 run lfd_data_collection LFD.py
+
+Go through the pick sequence. This will save a rosbag in `/apple_gripper/lfd_data_collection/data/bags`. Then export the OptiTrack data as a csv and place it in `/apple_gripper/lfd_data_collection/data/optitrack`.
+
+## Running the data playback sequence
+
+Optionally use plotjuggler to visualize the force/torque data during the playback:
+
+    sudo apt install ros-$ROS_DISTRO-plotjuggler-ros
+    ros2 run plotjuggler plotjuggler
+
+Next launch all of the nodes for playback. `arg1` is the path to the optitrack file relative to the data folder, and `arg2` is the path to the rosbag file relative to the data folder.
+
+    ros2 launch lfd_data_collection data_playback_launch.py arg1:="optitrack/Take 2024-08-16 12.02.44 AM.csv" arg2:=bags/20240816_8
+
+Optionally load the scene in rviz. In the MotionPlanning tab, click `Scene Objects`, then `Import`, and open `src/apple_gripper/gripper/config/LFD_scene_geometry.scene`
+
+Finally navigate to the bags folder and run the corresponding rosbag.
+
+    cd ~/ros_ws/src/apple_gripper/lfd_data_collection/data/bags
+    ros2 bag play 20240816_8
 

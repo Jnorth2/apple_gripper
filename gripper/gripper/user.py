@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # This node interacts with the user, starts the selected pick sequence,
-    # and saves the appropirate metadata as well as ros bags. This is the main script for using the gripper.
+    # and saves the appropirate metadata as well as ros bags. This is the main script for using the gripper on the robot.
 
 # ROS imports
 import rclpy
@@ -150,11 +150,11 @@ class User(Node):
 
                         # start rosbag recording (edit topics array to enable/disable camera recording)
                         rosbag_number = 1
-                        while os.path.exists('/apple_gripper/gripper/data/bags/' + self.datetime_simplified() + "_" + str(rosbag_number)):
+                        while os.path.exists('/apple_gripper/gripper/bags/' + self.datetime_simplified() + "_" + str(rosbag_number)):
                             rosbag_number += 1
                         self.get_logger().info("Starting rosbag")
-                        file_name = '/apple_gripper/gripper/data/bags/arm' + self.datetime_simplified() + "_" + str(rosbag_number)
-                        topics = ['/gripper/distance', '/gripper/pressure/sc1', '/gripper/pressure/sc2', '/gripper/pressure/sc3', '/gripper/motor/current', '/gripper/motor/position', '/gripper/motor/velocity', '/gripper/camera']
+                        file_name = '/apple_gripper/gripper/bags/' + self.datetime_simplified() + "_" + str(rosbag_number)
+                        topics = ['/gripper/distance', '/gripper/pressure', '/gripper/motor/current', '/gripper/motor/position', '/gripper/motor/velocity', '/gripper/camera']
                         cmd = 'ros2 bag record -o ' + file_name + ' ' + ' '.join(topics)
                         pro = subprocess.Popen(cmd, stdout=subprocess.PIPE, stdin=subprocess.PIPE,
                                         shell=True, preexec_fn=os.setsid) 

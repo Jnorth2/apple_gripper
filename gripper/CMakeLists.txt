@@ -46,12 +46,6 @@ install(PROGRAMS
   gripper/user.py
   gripper/suction_gripper.py
   gripper/arm_control.py
-  gripper/visualize_bags.py
-  gripper/force_torque_sensor.py
-  gripper/LFD.py
-  gripper/IMU_serial.py
-  gripper/optitrack.py
-  gripper/apple_attach.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
