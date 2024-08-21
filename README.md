@@ -1,4 +1,4 @@
-# Apple Picking Experiements with Apple Proxy & Custom Gripper
+# Learning From Demonstration Data Collection to Pick Apples
 
 This is a repository to collect apple picking data that will be used for Learning From Demonstration training. This repository was build on top of Ali Clara's ROS2 conversion of Alejo Velasquez's ROS1 apple proxy and gripper framework. Ali's repository can be found here(https://github.com/ali-clara/apple_gripper.git) and is listed under the GNU GPL license and Alejo's repository can be found here(https://github.com/velasale/suction-gripper) and is listed under the MIT license.
 
@@ -140,7 +140,7 @@ Go through the pick sequence. This will save a rosbag in `/apple_gripper/lfd_dat
 ## Running the data playback sequence
 
 <p align="center">
-  <img src="doc/data_playback.jpg">
+  <img src="doc/data_playback.png">
 </p>
 
 Optionally use plotjuggler to visualize the force/torque data during the playback:
