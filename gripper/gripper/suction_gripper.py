@@ -37,7 +37,7 @@ class SuctionGripper(Node):
 
         # set up Pyserial
         arduino_port = "/dev/ttyACM0"
-        baud = 57600
+        baud = 115200
         try:
             self.my_serial = serial.Serial(arduino_port, baud)
             self.get_logger().info(f"Connected to serial port {arduino_port}")
@@ -88,7 +88,6 @@ class SuctionGripper(Node):
                 self.get_logger().info(line)
 
 
-
     def vacuum_service_callback(self, request, response):
         """Callback function for the vacuum service. Uses the bool stored in set_vacuum
             to turn the vacuum on or off
@@ -108,7 +107,8 @@ class SuctionGripper(Node):
 
         response.result = True
         return response
-    
+
+
     def fingers_service_callback(self, request, response):
         """Callback function for the fingers service. Uses the bool stored in set_fingers
             to engage or disengage the grippers. This might be better as an action.
