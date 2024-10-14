@@ -17,7 +17,6 @@ find_package(gripper_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(moveit_msgs REQUIRED)
-find_package(gripper_msgs REQUIRED)
 
 
 # include cpp "include" directory
@@ -45,7 +44,6 @@ ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS
   gripper/user.py
   gripper/suction_gripper.py
-  gripper/gripper_stepper.py
   gripper/arm_control.py
   DESTINATION lib/${PROJECT_NAME}
 )

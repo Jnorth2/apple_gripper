@@ -15,6 +15,7 @@ import numpy as np
 import serial
 from serial import SerialException
 import re
+import time
 
 class SuctionGripper(Node):
     def __init__(self):
@@ -98,12 +99,14 @@ class SuctionGripper(Node):
             self.get_logger().info("Sending request: gripper vacuum on")
             msg_str = self.start_character+self.vacuum_on_command+self.end_character
             self.my_serial.write(str(msg_str).encode())
+            time.sleep(0.01)
             
         # if the request is False, turn the vacuum off
         elif not request.set_vacuum:
             self.get_logger().info("Sending request: gripper vacuum off")
             msg_str = self.start_character+self.vacuum_off_command+self.end_character
             self.my_serial.write(str(msg_str).encode())
+            time.sleep(0.01)
 
         response.result = True
         return response
