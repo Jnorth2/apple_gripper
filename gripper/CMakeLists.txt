@@ -42,6 +42,7 @@ ament_python_install_package(${PROJECT_NAME})
 
 # install python executables
 install(PROGRAMS
+  gripper/grasp_controller.py
   gripper/user.py
   gripper/suction_gripper.py
   gripper/arm_control.py
