@@ -42,6 +42,7 @@ class AlejoTrial(Node):
         # Create publisher
         self.marker_text_publisher = self.create_publisher(Marker, 'caption', 10)
 
+    ## ---------------  SERVICE CALLBACKS (SERVER)-------------- ##
     def toy_problem_callback(self, request, response):
         """
         """
@@ -79,32 +80,36 @@ class AlejoTrial(Node):
 
     def grasp_apple_callback(self, request, response):
 
-        # Make the service call: 'Vacuum on'
-        self.request = GripperVacuum.Request()
-        self.request.set_vacuum = True
-        self.future = self.vacuum_service_client.call_async(self.request)
-        #rclpy.spin_until_future_complete(self, self.future)
+        self.send_vacuum_request(True)
+        self.send_fingers_request(True)
 
-        # Make service call: 'Engage Fingers'
-        self.request = GripperFingers.Request()
-        self.request.set_fingers = True
-        self.future = self.fingers_service_client.call_async(self.request)
-        #rclpy.spin_until_future_complete(self, self.future)
-
-        # Make service call to move the arm back
-
-        # Make service call to Disengage Fingers
-        self.request = GripperFingers.Request()
-        self.request.set_fingers = False
-        self.future = self.fingers_service_client.call_async(self.request)
-
-
-        # Make service call: 'Vacuum off'
-        self.request = GripperVacuum.Request()
-        self.request.set_vacuum = False
-        self.future = self.vacuum_service_client.call_async(self.request)
-
+        self.send_fingers_request(False)
+        self.send_vacuum_request(False)
         return response
+
+
+    ## --------------- SERVICE CLIENT CALLS (REQUESTS) -------------- ##
+
+    def send_vacuum_request(self, vacuum_status):
+        """Function to call gripper vacuum service.
+            Inputs - vacuum_status (bool): True turns the vacuum on, False turns it off
+        """
+        # build the request
+        request = GripperVacuum.Request()
+        request.set_vacuum = vacuum_status
+        # make the service call (asynchronously)
+        self.vacuum_response = self.vacuum_service_client.call_async(request)
+
+    def send_fingers_request(self, fingers_status):
+        """Function to call gripper fingers service.
+            Inputs - fingers_status (bool): True engages the fingers, False disengages
+        """
+        # build the request
+        request = GripperFingers.Request()
+        request.set_fingers = fingers_status
+        # make the service call (asynchronously)
+        self.fingers_response = self.fingers_service_client.call_async(request)
+
 
 
     # def grasp_apple_callback_pending(self, request, response):
