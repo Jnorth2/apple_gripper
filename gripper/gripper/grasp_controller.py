@@ -19,7 +19,6 @@ from ament_index_python.packages import get_package_share_directory
 from std_srvs.srv import Trigger, Empty
 from geometry_msgs.msg import Point
 from visualization_msgs.msg import Marker, MarkerArray
-from harvest_interfaces.srv import TextInRviz
 from gripper_msgs.srv import GripperVacuum, GripperFingers
 
 class AlejoTrial(Node):
@@ -27,7 +26,7 @@ class AlejoTrial(Node):
         super().__init__('alejo_trial')
 
         # Services (type, name, function)
-        self.text_in_rviz_srv = self.create_service(TextInRviz, 'place_text_in_rviz', self.toy_problem_callback)
+        # self.text_in_rviz_srv = self.create_service(TextInRviz, 'place_text_in_rviz', self.toy_problem_callback)
         self.graps_apple_srv = self.create_service(Empty, 'grasp_apple', self.grasp_apple_callback)
 
         # Service clients
