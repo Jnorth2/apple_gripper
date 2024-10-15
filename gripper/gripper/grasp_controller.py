@@ -5,6 +5,7 @@ import numpy as np
 import scipy
 from scipy.ndimage import median_filter
 import os
+import time
 import json
 
 # ROS2 imports
@@ -15,21 +16,28 @@ from rclpy.node import Node
 from rclpy.executors import SingleThreadedExecutor
 from ament_index_python.packages import get_package_share_directory
 
+# ROS2 transforms
+from tf2_ros import TransformException
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
+import tf2_geometry_msgs
+
 # Interfaces
 from std_srvs.srv import Trigger, Empty
 from geometry_msgs.msg import Point
 from visualization_msgs.msg import Marker, MarkerArray
-from gripper_msgs.srv import GripperVacuum, GripperFingers
+from gripper_msgs.srv import GripperVacuum, GripperFingers, GripperMultiplexer, SetArmGoal, GetArmPosition
 
-class AlejoTrial(Node):
+class GraspController(Node):
     def __init__(self):
-        super().__init__('alejo_trial')
+        super().__init__('grasp_controller')
 
-        # Services (type, name, function)
+        # Services
         # self.text_in_rviz_srv = self.create_service(TextInRviz, 'place_text_in_rviz', self.toy_problem_callback)
         self.graps_apple_srv = self.create_service(Empty, 'grasp_apple', self.grasp_apple_callback)
 
-        # Service clients
+        # ----- SERVICE CLIENTS TO OPERATE GRIPPER -----
+        # These services are SERVED by the node "suction_gripper.py"
         self.vacuum_service_client = self.create_client(GripperVacuum, 'set_vacuum_status')
         while not self.vacuum_service_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Waiting for gripper vaccuum server")
@@ -37,6 +45,17 @@ class AlejoTrial(Node):
         self.fingers_service_client = self.create_client(GripperFingers, 'set_fingers_status')
         while not self.fingers_service_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Waiting for gripper finger server")
+        
+        # ------ SERVICE CLIENTS TO OPERATE ARM -----        
+        # These services are SERVED by the node "arm_control.py"
+        self.get_pos_service_client = self.create_client(GetArmPosition, 'get_arm_position')
+        while not self.get_pos_service_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info("Waiting for position server")
+        
+        self.arm_service_client = self.create_client(SetArmGoal, 'set_arm_goal')
+        while not self.arm_service_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info("Waiting for arm service")
+    
 
         # Create publisher
         self.marker_text_publisher = self.create_publisher(Marker, 'caption', 10)
@@ -79,16 +98,32 @@ class AlejoTrial(Node):
 
     def grasp_apple_callback(self, request, response):
 
-        self.send_vacuum_request(True)
-        self.send_fingers_request(True)
+        # Linear approach to the fruit
+        print('before')
+        self.send_position_request()
+        print('after')
 
+
+        # Swith vacuum on
+        self.send_vacuum_request(True)
+        time.sleep(0.5)
+
+        # Air pressure servoing
+
+
+        # Close fingers
+        self.send_fingers_request(True)
+        time.sleep(3)
+
+        # TODO: These should be commented out and replaced with Miranda's service calls
         self.send_fingers_request(False)
+        time.sleep(0.5)
         self.send_vacuum_request(False)
+
         return response
 
 
     ## --------------- SERVICE CLIENT CALLS (REQUESTS) -------------- ##
-
     def send_vacuum_request(self, vacuum_status):
         """Function to call gripper vacuum service.
             Inputs - vacuum_status (bool): True turns the vacuum on, False turns it off
@@ -109,6 +144,18 @@ class AlejoTrial(Node):
         # make the service call (asynchronously)
         self.fingers_response = self.fingers_service_client.call_async(request)
 
+    def send_position_request(self, frame="world"):
+        """Method to get the end effector position
+        Inputs: frame (string): Desired frame
+        """
+
+        # build request
+        request = GetArmPosition.Request()
+        request.frame = frame
+
+        # make the service call
+        self.current_arm_position = self.get_pos_service_client.call_async(request).result()
+        self.get_logger().info(self.current_arm_position)
 
 
     # def grasp_apple_callback_pending(self, request, response):
@@ -225,18 +272,17 @@ class AlejoTrial(Node):
 def main():
     rclpy.init()
 
-    alejo_trial = AlejoTrial()
+    grasp_controller = GraspController()
 
     # Use a SingleThreadedExecutor to handle the callbacks
     executor = SingleThreadedExecutor()
-    executor.add_node(alejo_trial)
-
+    executor.add_node(grasp_controller)
 
     try:
         executor.spin()
     finally:
         executor.shutdown()
-        alejo_trial.destroy_node()
+        grasp_controller.destroy_node()
         rclpy.shutdown()
 
 if __name__ == '__main__':
