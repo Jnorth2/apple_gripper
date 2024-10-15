@@ -30,8 +30,10 @@ class ArmControl(Node):
 
         # set up service clients
         self.arm_service_client = self.create_client(MoveArm, 'move_arm')
-        self.get_logger().info("Waiting for arm service")
-        self.arm_service_client.wait_for_service()
+        while not self.arm_service_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info("Waiting for arm service")       
+        
+        self.get_logger().info("Success: All services available")
 
         # set up some TF stuff
         self.tf_buffer = Buffer()

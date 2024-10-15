@@ -24,6 +24,7 @@ import tf2_geometry_msgs
 
 # Interfaces
 from std_srvs.srv import Trigger, Empty
+from geometry_msgs.msg import Vector3, WrenchStamped, TwistStamped, TransformStamped
 from geometry_msgs.msg import Point
 from visualization_msgs.msg import Marker, MarkerArray
 from gripper_msgs.srv import GripperVacuum, GripperFingers, GripperMultiplexer, SetArmGoal, GetArmPosition
@@ -31,12 +32,17 @@ from gripper_msgs.srv import GripperVacuum, GripperFingers, GripperMultiplexer, 
 class GraspController(Node):
     def __init__(self):
         super().__init__('grasp_controller')
+        
+        # Topic publishers
+        self.publisher = self.create_publisher(TwistStamped, '/servo_node/delta_twist_cmds', 10)
+        self.marker_text_publisher = self.create_publisher(Marker, 'caption', 10)
+      
 
         # Services
         # self.text_in_rviz_srv = self.create_service(TextInRviz, 'place_text_in_rviz', self.toy_problem_callback)
         self.graps_apple_srv = self.create_service(Empty, 'grasp_apple', self.grasp_apple_callback)
 
-        # ----- SERVICE CLIENTS TO OPERATE GRIPPER -----
+        # ---- SERVICE CLIENTS TO OPERATE GRIPPER ----
         # These services are SERVED by the node "suction_gripper.py"
         self.vacuum_service_client = self.create_client(GripperVacuum, 'set_vacuum_status')
         while not self.vacuum_service_client.wait_for_service(timeout_sec=1.0):
@@ -46,6 +52,7 @@ class GraspController(Node):
         while not self.fingers_service_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Waiting for gripper finger server")
         
+
         # ------ SERVICE CLIENTS TO OPERATE ARM -----        
         # These services are SERVED by the node "arm_control.py"
         self.get_pos_service_client = self.create_client(GetArmPosition, 'get_arm_position')
@@ -55,10 +62,12 @@ class GraspController(Node):
         self.arm_service_client = self.create_client(SetArmGoal, 'set_arm_goal')
         while not self.arm_service_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Waiting for arm service")
-    
+                
 
-        # Create publisher
-        self.marker_text_publisher = self.create_publisher(Marker, 'caption', 10)
+        self.get_logger().info("Success: All services available")
+
+        self.timer = self.create_timer(0.01, self.timer_callback)
+    
 
     ## ---------------  SERVICE CALLBACKS (SERVER)-------------- ##
     def toy_problem_callback(self, request, response):
@@ -99,9 +108,9 @@ class GraspController(Node):
     def grasp_apple_callback(self, request, response):
 
         # Linear approach to the fruit
-        print('before')
-        self.send_position_request()
-        print('after')
+        #print('before')
+        #self.send_position_request()
+        #print('after')
 
 
         # Swith vacuum on
@@ -109,6 +118,7 @@ class GraspController(Node):
         time.sleep(0.5)
 
         # Air pressure servoing
+        self.move_forward()
 
 
         # Close fingers
@@ -156,6 +166,20 @@ class GraspController(Node):
         # make the service call
         self.current_arm_position = self.get_pos_service_client.call_async(request).result()
         self.get_logger().info(self.current_arm_position)
+
+    def move_forward(self):
+        msg = TwistStamped()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = "tool0"
+
+        msg.twist.linear.z = 0.1
+
+        self.publisher.publish(msg)
+
+
+
+
+
 
 
     # def grasp_apple_callback_pending(self, request, response):
