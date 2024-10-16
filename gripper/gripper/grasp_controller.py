@@ -30,6 +30,9 @@ from std_msgs.msg import Float64, Bool, String
 from visualization_msgs.msg import Marker, MarkerArray
 from gripper_msgs.srv import GripperVacuum, GripperFingers, GripperMultiplexer, SetArmGoal, GetArmPosition
 
+# Self developed 
+from air_functions import * 
+
 class GraspController(Node):
     def __init__(self):
         super().__init__('grasp_controller')
@@ -255,73 +258,7 @@ class GraspController(Node):
         #     theta, omega = self.rotation_axis_angle(ps1_mean, ps2_mean, ps3_mean)
         #     cr_x, cr_y =
 
-    def rotation_axis_angle(gp1, gp2, gp3):
-        """
-
-        """
-        
-        def vector_math(pressure_array):
-            return v_sum
-        
-        def axis_of_rotation(v_sum):
-            return axis
-
-        def angle_math(v_sum):
-            theta = np.arctan2([v_sum[1]], [v_sum[0]])
-            return theta[0]
-
-        def speed_calc(v_sum):
-            return speed
-
-        pressure = [gp1, gp2, gp3]
-
-        neg_error1 = pressure[1] - 223 #(0.50 * pressure[1])
-        neg_error2 = pressure[2] - 223 #(0.50 * pressure[2])
-        pos_error1 = pressure[1] + 223 #(0.50 * pressure[1])
-        pos_error2 = pressure[2] + 223 #(0.50 * pressure[2])
-
-        if pressure[0] > 400 or pressure[1] > 400 or pressure[2] > 400:
-            v_sum = vector_math(pressure)
-            axis = axis_of_rotation(v_sum)
-            omega = angle_math(v_sum)
-            theta = np.linalg.norm(v_sum)
-            speed = speed_calc(v_sum)
-
-
-        elif pressure[0] <= 400 and pressure[1] <= 400 and pressure[2] <= 400:
-            if neg_error1 <= pressure[0] <= pos_error1:
-                if neg_error2 <= pressure[0] <= pos_error2:
-                    if neg_error1 <= pressure[2] <= pos_error1:
-                        print(f'All 3 suction cups engaged!')
-                        omega = 0
-                        theta = 0
-                            
-                    else:
-                        v_sum = vector_math(pressure)
-                        axis = axis_of_rotation(v_sum)
-                        omega = angle_math(v_sum)
-                        theta = np.linalg.norm(v_sum)
-                        speed = speed_calc(v_sum)
-                        
-
-                else: 
-                    v_sum = vector_math(pressure)
-                    axis = axis_of_rotation(v_sum)
-                    omega = angle_math(v_sum)
-                    theta = np.linalg.norm(v_sum)
-                    speed = speed_calc(v_sum)
-
-            else:
-                v_sum = vector_math(pressure)
-                axis = axis_of_rotation(v_sum)
-                omega = angle_math(v_sum)
-                theta = np.linalg.norm(v_sum)
-                speed = speed_calc(v_sum)
-
-
-
-
-        return theta, omega
+    
 
 
 
