@@ -24,8 +24,9 @@ import tf2_geometry_msgs
 
 # Interfaces
 from std_srvs.srv import Trigger, Empty
-from geometry_msgs.msg import Vector3, WrenchStamped, TwistStamped, TransformStamped
+from geometry_msgs.msg import Vector3, WrenchStamped, Twist, TwistStamped, TransformStamped
 from geometry_msgs.msg import Point
+from std_msgs.msg import Float64, Bool, String
 from visualization_msgs.msg import Marker, MarkerArray
 from gripper_msgs.srv import GripperVacuum, GripperFingers, GripperMultiplexer, SetArmGoal, GetArmPosition
 
@@ -34,9 +35,13 @@ class GraspController(Node):
         super().__init__('grasp_controller')
         
         # Topic publishers
-        self.publisher = self.create_publisher(TwistStamped, '/servo_node/delta_twist_cmds', 10)
+        self.grasp_servo_publisher = self.create_publisher(TwistStamped, '/servo_node/delta_twist_cmds', 10)        
         self.marker_text_publisher = self.create_publisher(Marker, 'caption', 10)
+
+        # Topic subscriber
+        self.tof_subscriber = self.create_subscription(String, '/gripper/distance', self.tof_process, 10)
       
+        
 
         # Services
         # self.text_in_rviz_srv = self.create_service(TextInRviz, 'place_text_in_rviz', self.toy_problem_callback)
@@ -54,19 +59,21 @@ class GraspController(Node):
         
 
         # ------ SERVICE CLIENTS TO OPERATE ARM -----        
-        # These services are SERVED by the node "arm_control.py"
-        self.get_pos_service_client = self.create_client(GetArmPosition, 'get_arm_position')
-        while not self.get_pos_service_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info("Waiting for position server")
+        # # These services are SERVED by the node "arm_control.py"
+        # self.get_pos_service_client = self.create_client(GetArmPosition, 'get_arm_position')
+        # while not self.get_pos_service_client.wait_for_service(timeout_sec=1.0):
+        #     self.get_logger().info("Waiting for position server")
         
-        self.arm_service_client = self.create_client(SetArmGoal, 'set_arm_goal')
-        while not self.arm_service_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info("Waiting for arm service")
+        # self.arm_service_client = self.create_client(SetArmGoal, 'set_arm_goal')
+        # while not self.arm_service_client.wait_for_service(timeout_sec=1.0):
+        #     self.get_logger().info("Waiting for arm service")
                 
 
         self.get_logger().info("Success: All services available")
 
-        self.timer = self.create_timer(0.01, self.timer_callback)
+        # self.timer = self.create_timer(0.01, self.timer_callback)
+
+        self.tof_distance = 0
     
 
     ## ---------------  SERVICE CALLBACKS (SERVER)-------------- ##
@@ -118,7 +125,18 @@ class GraspController(Node):
         time.sleep(0.5)
 
         # Air pressure servoing
-        self.move_forward()
+        print('before')
+        # 
+        self.get_logger().info("Approaching the apple...")
+        
+        # Use a loop, but consider non-blocking alternatives
+        rate = self.create_rate(10)  # 10 Hz loop rate
+
+        while self.tof_distance > 100:
+            self.move_forward()
+            self.get_logger().info(f"Distance: {self.tof_distance}")
+            rate.sleep()
+        # print('after')
 
 
         # Close fingers
@@ -168,18 +186,34 @@ class GraspController(Node):
         self.get_logger().info(self.current_arm_position)
 
     def move_forward(self):
+
         msg = TwistStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = "tool0"
 
-        msg.twist.linear.z = 0.1
-
-        self.publisher.publish(msg)
-
+        msg.twist.linear.z = + 0.1        
+        self.grasp_servo_publisher.publish(msg)
 
 
 
-
+    def tof_process(self, msg):
+        """The Time of Flight message is sent as a string.
+           The publisher of this topic is 'suction_gripper.py'
+           Input: @msg  type: String  (e.g. '[Ch3] Period: 57 ms, Distance: 172 mm')
+        """
+        """Processes the Time of Flight message sent as a string."""
+        self.get_logger().info("TOF process callback triggered.")
+        try:
+            tof_string = msg.data
+            distance_part = tof_string.split('Distance: ')[1]
+            distance = int(distance_part.split(' mm')[0])
+        
+            # Update the distance variable
+            self.tof_distance = distance
+            self.get_logger().info(f"Updated TOF distance: {self.tof_distance} mm")
+            
+        except (IndexError, ValueError) as e:
+            self.get_logger().error(f"Error processing TOF message: {msg.data} | Exception: {str(e)}")
 
 
     # def grasp_apple_callback_pending(self, request, response):
