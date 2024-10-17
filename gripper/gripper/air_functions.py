@@ -46,7 +46,7 @@ def axis_of_rotation(sum_vector):
     return theta
 
 
-def axis_angle_rotation(air_press_A, air_press_B, air_press_C):
+def axis_angle_rotation(air_pressures):
     """This method obtains an axis-angle representation from the three air-pressure readings
     returns:    rotation_axis (rads)
 
@@ -56,7 +56,7 @@ def axis_angle_rotation(air_press_A, air_press_B, air_press_C):
     ENGAGE_THRESHOLD = 400      # Engagement reference [HPa]
 
     # Obtain addition vector    
-    air_pressures = [air_press_A, air_press_B, air_press_C]
+    # air_pressures = [air_press_A, air_press_B, air_press_C]
     vsum = net_air_pressure(air_pressures)
 
     rotation_magnitude = np.linalg.norm(vsum)         # Norm of the vector
@@ -71,11 +71,14 @@ def axis_angle_rotation(air_press_A, air_press_B, air_press_C):
     return rotation_axis, rotation_magnitude
 
 
-def center_of_rotation(pA, pB, pC):
+def center_of_rotation(air_pressures):
     """
     Method to translate the center of rotation to the intersection between (i) the line that connects
     the suction cups engaged and (ii) a line aligned with vsum.
     """
+    pA = air_pressures[0]
+    pB = air_pressures[1]
+    pC = air_pressures[2]
 
     ENGAGE_THRESHOLD = 400
     SCUP_DISTANCE_TO_CENTER = 0.032     # [m] Distance from the center of the gripper to the center of the cup

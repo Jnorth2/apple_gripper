@@ -83,6 +83,7 @@ class GraspController(Node):
         # Parameters    
         self.VACUUM_TRIGGER_DISTANCE = 100   
         self.STOP_DISTANCE = 40   
+        self.ENGAGEMENT_THRESHOLD = 400
         
 
      ## ---  SERVICE CALLBACKS (SERVER)
@@ -101,12 +102,29 @@ class GraspController(Node):
                 self.get_logger().info("Servoing arm")   
                 self.rate.sleep()
                 
-                # Sense
+                # --- Step 1: Sense
+                # Sense tof distance
                 if self.tof_distance < self.VACUUM_TRIGGER_DISTANCE:
                     self.send_vacuum_request(True)
                 else:
                     self.send_vacuum_request(False)
+                # Sense air pressures
+                thr = self.ENGAGEMENT_THRESHOLD
+                scA = self.air_averages[0]
+                scB = self.air_averages[1]
+                scC = self.air_averages[2]
+                if scA < thr and scB < thr and scC < thr:
+                    self.get_logger().info("All suction cups engaged")
+                    pass
+
+                # --- Step 2: Adjust pose
+                # Axis and angle
+                axis, mag = axis_angle_rotation(self.air_averages)
+                # Center of rotation
+                x,y = center_of_rotation(self.air_averages)           
+                self.get_logger().info(f"Center of Rotation {x}, {y}")    
                 
+
               
                 
         except Exception as e:
@@ -192,7 +210,7 @@ class GraspController(Node):
             # Update the distance variable          
             self.tof_moving_avg.add_value(distance)
             self.tof_distance = self.tof_moving_avg.get_average()
-            self.get_logger().info(f"Updated TOF distance: {self.tof_distance} mm")
+            # self.get_logger().info(f"Updated TOF distance: {self.tof_distance} mm")
             
         except (IndexError, ValueError) as e:
             self.get_logger().error(f"Error processing TOF message: {msg.data} | Exception: {str(e)}")
