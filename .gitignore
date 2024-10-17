@@ -1,0 +1,10 @@
+# ignore these files
+*.json
+*.bag
+*.csv
+*.bag.active
+*.png
+*.idea
+*.xlsx
+*.avi
+*.pyc
