@@ -97,7 +97,7 @@ void setup() {
     delay(10);
 
     // Serial initialization
-    Serial.begin(115200);
+    Serial.begin(9600);
     while (!Serial);
     clearInputBuffer();
 

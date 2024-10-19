@@ -38,7 +38,7 @@ class SuctionGripper(Node):
 
         # set up Pyserial
         arduino_port = "/dev/ttyACM0"
-        baud = 115200
+        baud = 9600
         try:
             self.my_serial = serial.Serial(arduino_port, baud)
             self.get_logger().info(f"Connected to serial port {arduino_port}")
@@ -57,6 +57,8 @@ class SuctionGripper(Node):
         self.fingers_disengaged_command = "4"
         self.multiplexer_on_command = "5"
         self.multiplexer_off_command = "6"
+
+        self.last_data_reading = [1000, 1000, 1000]
     
 
     def timer_callback(self):
@@ -81,7 +83,25 @@ class SuctionGripper(Node):
                     publisher = self.publisher_list[0]
                     msg = Float32MultiArray
                     matches = re.findall('\d+', line)
-                    data = [float(matches[2]), float(matches[5]), float(matches[8])]
+
+                    try:
+                        if float(matches[2]) > 1100:
+                            matches[2] = self.last_data_reading[0]
+                        
+                        if float(matches[5]) > 1100:
+                            matches[5] = self.last_data_reading[1]
+                        
+                        if float(matches[8]) > 1100:
+                            matches[8] = self.last_data_reading[2]
+
+                        data = [float(matches[2]), float(matches[5]), float(matches[8])]     
+
+                        self.last_data_reading = data
+                    
+                    except IndexError or ValueError:
+                        data = self.last_data_reading
+
+
                     publisher.publish(Float32MultiArray(data=data))
 
             # if it does not have a tag it is user feedback and printed

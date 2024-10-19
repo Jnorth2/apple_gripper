@@ -66,6 +66,8 @@ class GraspController(Node):
         while not self.fingers_service_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Waiting for gripper finger server")
         
+
+        self.get_logger().info("All services Available!")
         
         # Recurring method
         self.timer = self.create_timer(0.01, self.timer_callback)
@@ -77,13 +79,16 @@ class GraspController(Node):
         self.move_flag = False
         self.rate = self.create_rate(1)
         self.fingers_previous_action = "close"
+        # Instantiate classes
         self.air_moving_avg = MovingAverage(10)     
         self.tof_moving_avg = MovingAverage(10)
+
+        self.air_averages = [1000, 1000, 1000]
 
         # Parameters    
         self.VACUUM_TRIGGER_DISTANCE = 100   
         self.STOP_DISTANCE = 40   
-        self.ENGAGEMENT_THRESHOLD = 400
+        self.ENGAGEMENT_THRESHOLD = 600
         
 
      ## ---  SERVICE CALLBACKS (SERVER)
@@ -107,7 +112,8 @@ class GraspController(Node):
                 if self.tof_distance < self.VACUUM_TRIGGER_DISTANCE:
                     self.send_vacuum_request(True)
                 else:
-                    self.send_vacuum_request(False)
+                    # self.send_vacuum_request(False)
+                    pass
                 # Sense air pressures
                 thr = self.ENGAGEMENT_THRESHOLD
                 scA = self.air_averages[0]
@@ -174,19 +180,35 @@ class GraspController(Node):
         if self.running:
 
             # ToF joystick
-            if self.tof_distance > self.STOP_DISTANCE:
+            # if self.tof_distance > self.STOP_DISTANCE:
 
-                error = 120 - self.tof_distance
-                vel = error/1000                
-                msg.twist.linear.z = vel
+            #     error = 120 - self.tof_distance
+            #     vel = error/1000                
+            #     msg.twist.linear.z = vel
+
+            thr = self.ENGAGEMENT_THRESHOLD
+            scA = self.air_averages[0]
+            scB = self.air_averages[1]
+            scC = self.air_averages[2]
 
             # if self.tof_distance > self.STOP_DISTANCE:                  
-            #     msg.twist.linear.z = 0.1
+                # msg.twist.linear.z = 0.2
 
-
-            else:
+            if scA > thr and scB > thr and scC > thr:
+                msg.twist.linear.z = 0.1
+            
+            elif scA < thr or scB < thr or scC < thr:
                 msg.twist.linear.z = 0.0
                 self.move_flag = False
+
+            # else:
+            #     msg.twist.linear.z = 0.0
+            #     self.move_flag = False
+        
+        else:
+                msg.twist.linear.z = 0.0
+                self.move_flag = False
+
 
         # Publish the Twist message
         self.grasp_servo_publisher.publish(msg)
