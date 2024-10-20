@@ -64,8 +64,8 @@ class SuctionGripper(Node):
         self.last_data_reading = [1000, 1000, 1000]
       
 
-        # Check that harware is working
-        time.sleep(0.5)        
+        # Hardware check
+        time.sleep(0.25)        
         self.initial_hw_check()        
     
 

@@ -20,9 +20,10 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 from ament_index_python.packages import get_package_share_directory
 
+import tf2_geometry_msgs
+
 # ROS2 transforms
-import tf
-from tf.transformations import euler_from_quaternion, quaternion_about_axis, quaternion_from_euler
+from tf_transformations import euler_from_quaternion, quaternion_about_axis, quaternion_from_euler
 from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
@@ -46,77 +47,94 @@ class GraspController(Node):
         # Specify reentrant callback group 
         r_callback_group = ReentrantCallbackGroup()
         
-        # Topic publishers
+        #----------------------------------- ROS TOPICS ---------------------------------------#
+        # Publishers
         self.grasp_servo_publisher = self.create_publisher(TwistStamped, '/servo_node/delta_twist_cmds', 10)        
         self.marker_text_publisher = self.create_publisher(Marker, 'caption', 10)
 
-        # Topic subscriber
+        # Subscribers
         self.tof_subscriber = self.create_subscription(String, '/gripper/distance', self.tof_process, 10)     
         self.air_press_subscriber = self.create_subscription(Float32MultiArray, '/gripper/pressure', self.air_press_process, 10)
-        self.pose_subscription = self.create_subscription(TransformStamped,'/tool_pose', self.read_eef_pose, 10)
+        # self.pose_subscription = self.create_subscription(TransformStamped,'/tool_pose', self.read_eef_pose, 10)
         
+
+        #------------------------------------ ROS SERVICES -------------------------------------#
         # Services
         # self.text_in_rviz_srv = self.create_service(TextInRviz, 'place_text_in_rviz', self.toy_problem_callback)
-        self.graps_apple_srv = self.create_service(Trigger, 'grasp_apple', self.grasp_apple_callback, callback_group=r_callback_group)
+        self.grasp_apple_srv = self.create_service(Trigger, 'grasp_apple', self.grasp_apple_callback, callback_group=r_callback_group)
+        self.release_apple_srv = self.create_service(Trigger, 'release_apple', self.release_apple_callback, callback_group=r_callback_group)
                                   
         # Service clients
         # Theses services are providede by the node 'suction_gripper.py'
         self.vacuum_service_client = self.create_client(GripperVacuum, 'set_vacuum_status')
         while not self.vacuum_service_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info("Waiting for gripper vaccuum server")
-        
+            self.get_logger().info("Waiting for gripper vaccuum server")        
 
         self.fingers_service_client = self.create_client(GripperFingers, 'set_fingers_status')
         while not self.fingers_service_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Waiting for gripper finger server")
         
-
         self.get_logger().info("All services Available!")
         
+        #----------------------------------- NODE PROPERTIES ----------------------------------#
         # Recurring method
         self.timer = self.create_timer(0.01, self.timer_callback)
+
+        # Parameters    
+        self.MAX_JOINT_SPEED = 1.5              # Parameter to max out the joint speeds
+        self.VACUUM_TRIGGER_DISTANCE = 100      # Distance to trigger vacuum during the approach
+        # self.STOP_DISTANCE = 40               # I DONT KNOW WHAT I AM DOING
+        self.ENGAGEMENT_THRESHOLD = 600         # Air pressure threshold to tell when a cup engaged
+        self.GRIPPER_HEIGHT = 0.2               # [m] Distance form 'tool0' to the center of the gripper with same height as engaged suctino cups
+        self.KP = self.MAX_JOINT_SPEED/800      # Proportional constant: converts max pressure error (1000-200 = 800)hPa to max joint speed rad/sec
         
+        ### Tf2
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
 
         # Variables        
         self.running = False
         self.tof_distance = 200        
         self.move_flag = False
         self.rate = self.create_rate(1)
-        self.fingers_previous_action = "close"
-        # Instantiate classes
-        self.air_moving_avg = MovingAverage(10)     
+        self.fingers_previous_action = "close"        
+        # Instantiate classes        
+        self.airABC_moving_avg_list = []
+        for i in range(3):
+            self.airABC_moving_avg_list.append(MovingAverage(10))           
         self.tof_moving_avg = MovingAverage(10)
 
-        self.twist.linear.x = 0.0
-        self.twist.linear.y = 0.0
-        self.twist.linear.z = 0.0
-        self.twist.angular.x = 0.0
-        self.twist.angular.y = 0.0
-        self.twist.angular.z = 0.0
+        self.angular_speed_x = 0.0
+        self.angular_speed_y = 0.0
 
-        self.air_averages = [1000, 1000, 1000]
+        self.cr_x = 0.0
+        self.cr_y = 0.0
 
-        # Parameters    
-        self.VACUUM_TRIGGER_DISTANCE = 100   
-        self.STOP_DISTANCE = 40   
-        self.ENGAGEMENT_THRESHOLD = 600
-        self.GRIPPER_HEIGHT = 0.2         # [m] Distance form 'tool0' to the center of the gripper with same height as engaged suctino cups
-        self.KP = 0.015                   # convert  hPa to rad/sec
+        self.air_averages = [1000, 1000, 1000]            
 
-        # 
-        # self.initial_hw_check()
+        # Rotation matrix 
+        theta = math.radians(150)
+        self.ROT_MATRIX = np.array([[np.cos(theta), -np.sin(theta), 0],
+                                    [np.sin(theta),  np.cos(theta), 0],
+                                    [0            ,  0            , 1]])
+               
         
 
-     ## ---  SERVICE CALLBACKS (SERVER)
+     ## --- ROS SERVICES CALLBACKS (SERVER) ---
     def grasp_apple_callback(self, request, response):
 
         self.get_logger().info("Activating grasping node")
         self.move_flag = True
         self.running = True
+
         self.get_logger().info("Making sure fingers are open")
         if self.fingers_previous_action == "close":
             self.send_fingers_request(False)
+
         self.fingers_previous_action = "open"
+
+        # TODO Remove this line, it should be triggered by tof
+        self.send_vacuum_request(True)
 
         try:
             while rclpy.ok() and self.move_flag:
@@ -129,58 +147,45 @@ class GraspController(Node):
                     self.send_vacuum_request(True)
                 else:
                     # self.send_vacuum_request(False)
-                    pass
-                # Sense air pressures
-                thr = self.ENGAGEMENT_THRESHOLD
-                scA = self.air_averages[0]
-                scB = self.air_averages[1]
-                scC = self.air_averages[2]
-                if scA < thr and scB < thr and scC < thr:
-                    self.get_logger().info("All suction cups engaged")
-                    self.move_flag == False
-                    pass
-
-
-                # --- Step 2: Adjust pose
-                # Axis and angle
-                axis, mag = axis_angle_rotation(self.air_averages)
-
-                # Center of rotation
-                cr_x, cr_y = center_of_rotation(self.air_averages)      # units: m               
-                self.get_logger().info(f"Center of Rotation {cr_x}, {cr_y}")    
+                    pass                                      
                 
-                # Current pose
-                eef_position = self.eef_point
-                eef_orientation = self.eef_orientation
-
-                angle = mag * self.KP
-                quat = self.quat_from_axis_angle(axis, angle )
-                eulers = euler_from_quaternion(quat)
-
-                self.twist.angular.x = eulers[0]
-                self.twist.angular.y = eulers[1]
-
-                
-
-                
-                
-              
                 
         except Exception as e:
             self.get_logger().error(f"Error during grasping: {str(e)}")
-        finally:
+        finally:                      
+
             self.move_flag = False
             self.running = False
             self.get_logger().info("Deploying fingers")            
             if self.fingers_previous_action == "open":
                 self.send_fingers_request(True)
             self.fingers_previous_action = "close"
-            
+
+            # TODO: this is for debugging, delete when done
+            time.sleep(4)    
         
         return response
     
     
-    ## --- SERVICE CLIENT CALLS (REQUESTS FROM THIS NODE)
+
+    def release_apple_callback(self, request, response):
+        """
+        Simple service to release the apple at the end of the pick
+        """
+
+        # Open Fingers
+        self.send_fingers_request(False)
+
+        time.sleep(2)
+
+        # Turn Vacuum Off
+        self.send_vacuum_request(False)
+
+        return response
+
+
+
+    ## --- ROS SERVICE CLIENT CALLS (REQUESTS FROM THIS NODE) ---
     def send_vacuum_request(self, vacuum_status):
         """Function to call gripper vacuum service.
             Inputs - vacuum_status (bool): True turns the vacuum on, False turns it off
@@ -203,44 +208,53 @@ class GraspController(Node):
         self.fingers_response = self.fingers_service_client.call_async(request)
     
     
-    ## --- RUNNING FUNCTION TO CONTROL THE FLOW OF THE SERVICE 
+    ## --- RUNNING FUNCTION TO CONTROL THE FLOW OF THE SERVICES 
     def timer_callback(self):
         
         # Create a Twist message for moving the arm
         msg = TwistStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = "tool0"
+        msg.header.frame_id = "gripper_scups_link"
+        # msg.header.frame_id = "tool0"
 
         if self.running:
+            
+            # TRANSFORMATION CHOICE 1 (frame_id = 'tool0')              
+            # 1 - Transform with rotation matrix from 'scup frame' into 'tool0 frame
+            # speeds = np.array([0.1, 0.0, 0.0])
+            # angular_velocities = np.dot(self.ROT_MATRIX, speeds.T)
 
-            # ToF joystick
-            # if self.tof_distance > self.STOP_DISTANCE:
+            # TRANSFORMATION CHOICE 2 (frame_id = 'gripper_scups_link')
+            # 1 - NO need to perform the rotation transformation            
+            # angular_velocities = np.array([self.ref_angular_x, self.ref_angular_y, 0.0])
+            angular_velocities = np.array([self.angular_speed_x, self.angular_speed_y, 0.0])
 
-            #     error = 120 - self.tof_distance
-            #     vel = error/1000                
-            #     msg.twist.linear.z = vel
+            # In both cases, translation does need to be performed to obtain linear velocities
+            position_vector = np.array([self.cr_x, self.cr_y, -self.GRIPPER_HEIGHT])
+            linear_velocities = np.cross(angular_velocities, position_vector)
 
-            # FOR THE DISTANCE PART
+            msg.twist.linear.x = linear_velocities[0]
+            msg.twist.linear.y = linear_velocities[1]
+            msg.twist.linear.z = linear_velocities[2]   
+            msg.twist.angular.x = angular_velocities[0]  
+            msg.twist.angular.y = angular_velocities[1]  
+            msg.twist.angular.z = angular_velocities[2]  
+
             thr = self.ENGAGEMENT_THRESHOLD
             scA = self.air_averages[0]
             scB = self.air_averages[1]
             scC = self.air_averages[2]
 
-            # if self.tof_distance > self.STOP_DISTANCE:                  
-                # msg.twist.linear.z = 0.2
-            
-            # if scA > thr and scB > thr and scC > thr:
-                # msg.twist.linear.z = 0.1
-
-            msg.twist.angular.x = self.twist.angular.x
-            msg.twist.angular.y = self.twist.angular.y                   
-            
             # If all engaged, leave!!
             if scA < thr and scB < thr and scC < thr:                
-                msg.twist.angular.x = 0.0
-                msg.twist.angular.y = 0.0        
+                msg.twist.linear.x = 0.0
+                msg.twist.linear.y = 0.0
                 msg.twist.linear.z = 0.0
+                msg.twist.angular.x = 0.0
+                msg.twist.angular.y = 0.0
+                msg.twist.angular.z = 0.0
 
+                self.get_logger().info("All suction cups engaged")
                 self.move_flag = False
             
         else:                              
@@ -251,14 +265,13 @@ class GraspController(Node):
                 msg.twist.angular.y = 0.0
                 msg.twist.angular.z = 0.0
 
-                self.move_flag = False
+                self.move_flag = False       
 
-
-        # Publish the Twist message
+        # Publish Twist message
         self.grasp_servo_publisher.publish(msg)
 
 
-    ## --- FUNCTIONS TRIGGERED BY THE TOPIC SUBSCRIBERS
+    ## --- FUNCTIONS TRIGGERED BY TOPIC SUBSCRIBERS
     def tof_process(self, msg):
         """ This is a SUBSCRIBER to a topic
             The Time of Flight message is sent as a string.
@@ -283,15 +296,42 @@ class GraspController(Node):
 
 
     def air_press_process(self, msg):
+        """
+        This method read the topic with the air-pressures and implements a moving average
+        """
 
         try:
             self.air_pressure = msg.data
-            self.air_averages = []
-            for reading in self.air_pressure:
-                self.air_moving_avg.add_value(reading)
-                self.air_averages.append(self.air_moving_avg.get_average())
+            air_averages = []
+            for i, reading in  enumerate (self.air_pressure):                
+                self.airABC_moving_avg_list[i]. add_value(reading)
+                air_averages.append(self.airABC_moving_avg_list[i].get_average())            
+            self.air_averages = air_averages
 
-            # self.get_logger().info(f"Updated Air Pressure: {self.air_averages} hPa")
+            self.get_logger().info("")
+            self.get_logger().info(f"Updated Air Pressure: {self.air_averages} hPa")
+
+            # Rotation axis and angle
+            axis, mag = axis_angle_rotation(self.air_averages)      # Response units in [radians]
+            self.get_logger().info(f"Rotation axis [deg]: {int(math.degrees(axis))}, Rotation angle [deg]: {int(math.degrees(mag))}") 
+
+            # Center of rotation
+            cr_x, cr_y = center_of_rotation(self.air_averages)      # Response units in [m]               
+            self.get_logger().info(f"Center of Rotation [m]: {cr_x}, {cr_y}")    
+
+            self.cr_x = cr_x
+            self.cr_y = cr_y
+            
+            angle = mag * self.KP
+
+            x_speed = angle * math.cos(axis)
+            y_speed = angle * math.sin(axis)
+            self.get_logger().info(f"Speeds: {round(x_speed,2)}, {round(y_speed,2)}")  
+
+            self.angular_speed_x = x_speed
+            self.angular_speed_y = y_speed
+
+            
 
         except (IndexError, ValueError) as e:
             self.get_logger().error(f"Error processing Air Pressure message: {msg.data} | Exception: {str(e)}")
@@ -359,15 +399,18 @@ class GraspController(Node):
 
 
     def quat_from_axis_angle(self, axis, angle):
+        """
+        Angle provided in radians
+        """
 
-        angle_rad = math.radians(angle / 2)
+        angle_rad = angle / 2
         s = math.sin(angle_rad)
         c = math.cos(angle_rad)
         q = [s * math.cos(math.radians(axis)), s * math.sin(math.radians(axis)), 0, c]
 
         return q
 
-
+   
         
 
 

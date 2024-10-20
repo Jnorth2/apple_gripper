@@ -41,6 +41,7 @@ def axis_of_rotation(sum_vector):
 
     # Approach 2 from Alejo
     theta = np.arctan2(sum_vector[1], sum_vector[0])
+
     theta -= np.pi/2          # rotate -90deg
 
     return theta
@@ -87,34 +88,35 @@ def center_of_rotation(air_pressures):
     y = 0
 
     # Case A
-    if pA < ENGAGE_THRESHOLD:
+    if pA < ENGAGE_THRESHOLD and pB > ENGAGE_THRESHOLD and pC > ENGAGE_THRESHOLD:
         x = np.cos(np.pi / 3) * SCUP_DISTANCE_TO_CENTER
         y = np.sin(np.pi / 3) * SCUP_DISTANCE_TO_CENTER
     
     # Case B
-    if pB < ENGAGE_THRESHOLD:
+    if pB < ENGAGE_THRESHOLD and pA > ENGAGE_THRESHOLD and pC > ENGAGE_THRESHOLD:
         x = -SCUP_DISTANCE_TO_CENTER
         y = 0
     # Case C
-    if pC < ENGAGE_THRESHOLD:
+    if pC < ENGAGE_THRESHOLD and pB > ENGAGE_THRESHOLD and pA > ENGAGE_THRESHOLD:
         x = np.cos(-np.pi / 3) * SCUP_DISTANCE_TO_CENTER
         y = np.sin(-np.pi / 3) * SCUP_DISTANCE_TO_CENTER
     
+    
     # Case A & B
-    if pA < ENGAGE_THRESHOLD and pB < ENGAGE_THRESHOLD:
+    if pA < ENGAGE_THRESHOLD and pB < ENGAGE_THRESHOLD and pC > ENGAGE_THRESHOLD:
         x = (1 / 2) * ((pA + pC - (2 * pB)) / (pA - (2 * pC) + pB)) * SCUP_DISTANCE_TO_CENTER
         y = (np.sqrt(3) / 2) * ((pA - pC) / (pA - (2 * pC) + pB)) * SCUP_DISTANCE_TO_CENTER
     # Case A & C
-    if pA < ENGAGE_THRESHOLD and pC < ENGAGE_THRESHOLD:
+    if pA < ENGAGE_THRESHOLD and pC < ENGAGE_THRESHOLD and pB > ENGAGE_THRESHOLD:
         x = (1 / 2) * SCUP_DISTANCE_TO_CENTER
         y = (np.sqrt(3) / 2) * ((pA - pC) / (pA + pC - (2 * pB))) * SCUP_DISTANCE_TO_CENTER
     # Case B & C
-    if pB < ENGAGE_THRESHOLD and pC < ENGAGE_THRESHOLD:
+    if pB < ENGAGE_THRESHOLD and pC < ENGAGE_THRESHOLD and pA > ENGAGE_THRESHOLD:
         x = (-1 / 2) * ((pA + pC - (2 * pB)) / ((2 * pA) - pC - pB)) * SCUP_DISTANCE_TO_CENTER
         y = (-np.sqrt(3) / 2) * ((pA - pC) / ((2 * pA) - pC - pB)) * SCUP_DISTANCE_TO_CENTER
 
 
-    return x, y     # Units in [m]
+    return round(x, 4), round(y, 4)     # Units in [m]
 
 
 
