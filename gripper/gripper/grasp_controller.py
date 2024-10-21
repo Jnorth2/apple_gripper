@@ -416,49 +416,7 @@ class GraspController(Node):
         q = [s * math.cos(math.radians(axis)), s * math.sin(math.radians(axis)), 0, c]
 
         return q
-
    
-        
-
-
-    # def grasp_apple_callback_pending(self, request, response):
-        # # Air-Pressure servoing Parameters
-        # MAX_ATTEMPTS = 5
-        # PRESSURE_READINGS = 10
-        # ENGAGEMENT_THRESHOLD = 600    # Units hPa
-        #
-        # # Approach fruit in straight line
-        # # TODO: linear approach and turn vacuum on
-        # # TODO: Subscribe to the toF distance
-        # self.get_logger().info(f'Initial linear approach to apple')
-        #
-        # # Control loop
-        # cnt = 0
-        # while cnt < MAX_ATTEMPTS:
-        #
-        #     # Air Pressure Readings
-        #     ps1_list = []
-        #     ps2_list = []
-        #     ps3_list = []
-        #     for i in range(PRESSURE_READINGS):
-        #         # TODO: Have the gripper publishing the air-pressure readings
-        #         # TODO: Have this node subscribed to the air-pressure readings
-        #         ps1_list.append(TODO)
-        #         ps2_list.append(TODO)
-        #         ps3_list.append(TODO)
-        #     ps1_mean = np.mean(ps1_list)
-        #     ps2_mean = np.mean(ps2_list)
-        #     ps3_mean = np.mean(ps3_list)
-        #     self.get_logger().info(f'Mean Air Pressure Readings: {int(ps1_mean)}, {int(ps2_mean)}, {int(ps3_mean)}')
-        #
-        #     if ps1_mean < ENGAGEMENT_THRESHOLD and ps2_mean < ENGAGEMENT_THRESHOLD and ps3_mean < ENGAGEMENT_THRESHOLD:
-        #         self.get_logger().info(f'All suction cups are engaged')
-        #         break
-        #
-        #     # Adjust Pose
-        #     self.get_logger().info(f'Adjusting angular pose of gripper')
-        #     theta, omega = self.rotation_axis_angle(ps1_mean, ps2_mean, ps3_mean)
-        #     cr_x, cr_y =
 
 
 class MovingAverage:
