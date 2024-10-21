@@ -81,22 +81,18 @@ class GraspController(Node):
         self.timer = self.create_timer(0.01, self.timer_callback)
 
         # Parameters    
-        self.MAX_JOINT_SPEED = 1.5              # Parameter to max out the joint speeds
-        self.VACUUM_TRIGGER_DISTANCE = 100      # Distance to trigger vacuum during the approach
-        # self.STOP_DISTANCE = 40               # I DONT KNOW WHAT I AM DOING
-        self.ENGAGEMENT_THRESHOLD = 600         # Air pressure threshold to tell when a cup engaged
-        self.GRIPPER_HEIGHT = 0.2               # [m] Distance form 'tool0' to the center of the gripper with same height as engaged suctino cups
-        self.KP = self.MAX_JOINT_SPEED/800      # Proportional constant: converts max pressure error (1000-200 = 800)hPa to max joint speed rad/sec
+        self.MAX_JOINT_SPEED = 2.0                  # Parameter to max out the joint speeds
+        self.VACUUM_TRIGGER_DISTANCE = 100          # Distance to trigger vacuum during the approach
+        self.ENGAGEMENT_THRESHOLD = 600             # Air pressure threshold to tell when a cup engaged
+        self.GRIPPER_HEIGHT = 0.19                  # [m] Distance form 'tool0' to the center of the gripper with same height as engaged suctino cups
+        self.KP = self.MAX_JOINT_SPEED/800          # Proportional constant: converts max pressure error (1000-200 = 800)hPa to max joint speed rad/sec
         
         ### Tf2
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        # Variables        
-        self.running = False
-        self.tof_distance = 200        
-        self.move_flag = False
-        self.rate = self.create_rate(1)
+        # Variables                          
+        self.rate = self.create_rate(0.5)
         self.fingers_previous_action = "close"        
         # Instantiate classes        
         self.airABC_moving_avg_list = []
@@ -104,20 +100,24 @@ class GraspController(Node):
             self.airABC_moving_avg_list.append(MovingAverage(10))           
         self.tof_moving_avg = MovingAverage(10)
 
-        self.angular_speed_x = 0.0
-        self.angular_speed_y = 0.0
-
-        self.cr_x = 0.0
-        self.cr_y = 0.0
-
-        self.air_averages = [1000, 1000, 1000]            
-
+        self.tof_distance = 200                     # units in mm             
+        self.air_averages = [1000, 1000, 1000]      # units in hPa      
+        self.angular_speed_x = 0.0                  # units in rad/sec
+        self.angular_speed_y = 0.0                  # units in rad/sec
+        self.cr_x = 0.0                             # units in m
+        self.cr_y = 0.0                             # units in m
+        
         # Rotation matrix 
-        theta = math.radians(150)
+        theta = math.radians(150)                   # angle between "gripper_scups_link" and "tool0"
         self.ROT_MATRIX = np.array([[np.cos(theta), -np.sin(theta), 0],
                                     [np.sin(theta),  np.cos(theta), 0],
                                     [0            ,  0            , 1]])
-               
+        
+        # Flags
+        self.running        = False
+        self.move_flag      = False
+        self.vacuum_flag    = False
+        self.state          = "approach"
         
 
      ## --- ROS SERVICES CALLBACKS (SERVER) ---
@@ -125,30 +125,13 @@ class GraspController(Node):
 
         self.get_logger().info("Activating grasping node")
         self.move_flag = True
-        self.running = True
-
-        self.get_logger().info("Making sure fingers are open")
-        if self.fingers_previous_action == "close":
-            self.send_fingers_request(False)
-
-        self.fingers_previous_action = "open"
-
-        # TODO Remove this line, it should be triggered by tof
-        self.send_vacuum_request(True)
+        self.running = True      
 
         try:
             while rclpy.ok() and self.move_flag:
-                self.get_logger().info("Servoing arm")   
-                self.rate.sleep()
-                
-                # --- Step 1: Sense
-                # Sense tof distance
-                if self.tof_distance < self.VACUUM_TRIGGER_DISTANCE:
-                    self.send_vacuum_request(True)
-                else:
-                    # self.send_vacuum_request(False)
-                    pass                                      
-                
+                # Remain in this while loop until 'self.move_flag' is set off
+                self.get_logger().info(f"Grasping apple. State: \033[33m{self.state}\033[0m")   
+                self.rate.sleep()                                          
                 
         except Exception as e:
             self.get_logger().error(f"Error during grasping: {str(e)}")
@@ -156,10 +139,10 @@ class GraspController(Node):
 
             self.move_flag = False
             self.running = False
-            self.get_logger().info("Deploying fingers")            
-            if self.fingers_previous_action == "open":
-                self.send_fingers_request(True)
-            self.fingers_previous_action = "close"
+
+            self.state = "deploying fingers"
+            self.get_logger().info(f"Grasping apple. State: \033[33m{self.state}\033[0m")   
+            self.send_fingers_request(True)
 
             # TODO: this is for debugging, delete when done
             time.sleep(4)    
@@ -218,33 +201,57 @@ class GraspController(Node):
         # msg.header.frame_id = "tool0"
 
         if self.running:
-            
-            # TRANSFORMATION CHOICE 1 (frame_id = 'tool0')              
-            # 1 - Transform with rotation matrix from 'scup frame' into 'tool0 frame
-            # speeds = np.array([0.1, 0.0, 0.0])
-            # angular_velocities = np.dot(self.ROT_MATRIX, speeds.T)
-
-            # TRANSFORMATION CHOICE 2 (frame_id = 'gripper_scups_link')
-            # 1 - NO need to perform the rotation transformation            
-            # angular_velocities = np.array([self.ref_angular_x, self.ref_angular_y, 0.0])
-            angular_velocities = np.array([self.angular_speed_x, self.angular_speed_y, 0.0])
-
-            # In both cases, translation does need to be performed to obtain linear velocities
-            position_vector = np.array([self.cr_x, self.cr_y, -self.GRIPPER_HEIGHT])
-            linear_velocities = np.cross(angular_velocities, position_vector)
-
-            msg.twist.linear.x = linear_velocities[0]
-            msg.twist.linear.y = linear_velocities[1]
-            msg.twist.linear.z = linear_velocities[2]   
-            msg.twist.angular.x = angular_velocities[0]  
-            msg.twist.angular.y = angular_velocities[1]  
-            msg.twist.angular.z = angular_velocities[2]  
 
             thr = self.ENGAGEMENT_THRESHOLD
             scA = self.air_averages[0]
             scB = self.air_averages[1]
             scC = self.air_averages[2]
+            
+            if self.state == "approach":
+                msg.twist.linear.x = 0.0
+                msg.twist.linear.y = 0.0
+                msg.twist.linear.z = 0.2
+                msg.twist.angular.x = 0.0
+                msg.twist.angular.y = 0.0
+                msg.twist.angular.z = 0.0
 
+                if self.tof_distance < self.VACUUM_TRIGGER_DISTANCE and not self.vacuum_flag:
+                    self.send_vacuum_request(True)
+                    self.vacuum_flag = True
+
+                if scA < thr or scB < thr or scC < thr:
+                    self.state = "servoing"
+                    msg.twist.linear.x = 0.0
+                    msg.twist.linear.y = 0.0
+                    msg.twist.linear.z = 0.0
+                    msg.twist.angular.x = 0.0
+                    msg.twist.angular.y = 0.0
+                    msg.twist.angular.z = 0.0
+            
+            if self.state == "servoing":               
+
+                # TRANSFORMATION CHOICE 1 (frame_id = 'tool0')              
+                # 1 - Transform with rotation matrix from 'scup frame' into 'tool0 frame
+                # speeds = np.array([0.1, 0.0, 0.0])
+                # angular_velocities = np.dot(self.ROT_MATRIX, speeds.T)
+
+                # TRANSFORMATION CHOICE 2 (frame_id = 'gripper_scups_link')
+                # 1 - NO need to perform the rotation transformation            
+                # angular_velocities = np.array([self.ref_angular_x, self.ref_angular_y, 0.0])
+                angular_velocities = np.array([self.angular_speed_x, self.angular_speed_y, 0.0])
+
+                # In both cases, translation does need to be performed to obtain linear velocities
+                position_vector = np.array([-self.cr_x, -self.cr_y, -self.GRIPPER_HEIGHT])
+                linear_velocities = np.cross(angular_velocities, position_vector)
+
+                msg.twist.linear.x = linear_velocities[0]
+                msg.twist.linear.y = linear_velocities[1]
+                msg.twist.linear.z = linear_velocities[2]   
+                msg.twist.angular.x = angular_velocities[0]  
+                msg.twist.angular.y = angular_velocities[1]  
+                msg.twist.angular.z = angular_velocities[2]  
+
+            
             # If all engaged, leave!!
             if scA < thr and scB < thr and scC < thr:                
                 msg.twist.linear.x = 0.0
