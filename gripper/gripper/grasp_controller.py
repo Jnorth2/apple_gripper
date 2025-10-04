@@ -30,10 +30,10 @@ from tf2_ros.transform_listener import TransformListener
 import tf2_geometry_msgs
 
 # Interfaces
-from std_srvs.srv import Trigger, Empty
+from std_srvs.srv import Trigger, Empty, SetBool
 from geometry_msgs.msg import Vector3, WrenchStamped, Twist, TwistStamped, TransformStamped
 from geometry_msgs.msg import Point
-from std_msgs.msg import Float64, Bool, String, Float32MultiArray
+from std_msgs.msg import Float64, Bool, String, Float32MultiArray, Int16MultiArray
 from visualization_msgs.msg import Marker, MarkerArray
 from gripper_msgs.srv import GripperVacuum, GripperFingers, GripperMultiplexer, SetArmGoal, GetArmPosition
 
@@ -46,15 +46,37 @@ class GraspController(Node):
 
         # Specify reentrant callback group 
         r_callback_group = ReentrantCallbackGroup()
-        
+        #-------------------------------- Node Parameters -------------------------------------#
+        self.declare_parameter("gripper_type", "old")
+        self.gripper_type = self.get_parameter("gripper_type").get_parameter_value().string_value
+
+        if self.gripper_type == "finray":
+            self.finger_service_type = SetBool
+            self.valve_service_type = SetBool
+            self.finger_service = "/microROS/actuate_odrive"
+            self.suction_valve_service = "/microROS/toggle_valve"
+            self.sensor_topic = "microROS/sensor_data"
+        else:
+            self.finger_service_type = GripperFingers
+            self.valve_service_type = GripperVacuum
+            self.finger_service = "set_fingers_status"
+            self.suction_valve_service = "set_vacuum_status"
+            self.tof_topic = "/gripper/distance"
+            self.press_topic = "/gripper/pressure"
+        self.get_logger().info(f"gripper type: {self.gripper_type}")
+
         #----------------------------------- ROS TOPICS ---------------------------------------#
         # Publishers
         self.grasp_servo_publisher = self.create_publisher(TwistStamped, '/servo_node/delta_twist_cmds', 10)        
         self.marker_text_publisher = self.create_publisher(Marker, 'caption', 10)
 
         # Subscribers
-        self.tof_subscriber = self.create_subscription(String, '/gripper/distance', self.tof_process, 10)     
-        self.air_press_subscriber = self.create_subscription(Float32MultiArray, '/gripper/pressure', self.air_press_process, 10)
+        if self.gripper_type == "finray":
+            self.sensor_subscriber = self.create_subscription(Int16MultiArray, self.sensor_topic, self.sensor_process, 10)
+        else:
+            self.tof_subscriber = self.create_subscription(String, self.tof_topic, self.tof_process, 10)     
+            self.air_press_subscriber = self.create_subscription(Float32MultiArray, self.press_topic, self.air_press_process, 10)
+        
         # self.pose_subscription = self.create_subscription(TransformStamped,'/tool_pose', self.read_eef_pose, 10)
         
 
@@ -66,11 +88,11 @@ class GraspController(Node):
                                   
         # Service clients
         # Theses services are providede by the node 'suction_gripper.py'
-        self.vacuum_service_client = self.create_client(GripperVacuum, 'set_vacuum_status')
+        self.vacuum_service_client = self.create_client(self.valve_service_type, self.suction_valve_service)
         while not self.vacuum_service_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Waiting for gripper vaccuum server")        
 
-        self.fingers_service_client = self.create_client(GripperFingers, 'set_fingers_status')
+        self.fingers_service_client = self.create_client(self.finger_service_type, self.finger_service)
         while not self.fingers_service_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Waiting for gripper finger server")
         
@@ -86,7 +108,7 @@ class GraspController(Node):
         self.ENGAGEMENT_THRESHOLD = 600             # Air pressure threshold to tell when a cup engaged
         self.GRIPPER_HEIGHT = 0.19                  # [m] Distance form 'tool0' to the center of the gripper with same height as engaged suctino cups
         self.KP = self.MAX_JOINT_SPEED/800          # Proportional constant: converts max pressure error (1000-200 = 800)hPa to max joint speed rad/sec
-        
+
         ### Tf2
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -342,6 +364,58 @@ class GraspController(Node):
 
         except (IndexError, ValueError) as e:
             self.get_logger().error(f"Error processing Air Pressure message: {msg.data} | Exception: {str(e)}")
+
+    def sensor_process(self, msg):
+        """Read Sensor data and implement moving averages
+
+        This function does the same logic as the air_press_process and tof_process functions but 
+        for sensor data combined in one topic. This is for esp32 grippers running microros and 
+        publishing Int16MultiArray sensor data in the format [p1, p2, p3, tof]. 
+        """
+        try: 
+            data = msg.data
+            air_pressure = data[0:3]
+            distance = data[-1]
+            # Update the distance variable          
+            self.tof_moving_avg.add_value(distance)
+            self.tof_distance = self.tof_moving_avg.get_average()
+            # self.get_logger().info(f"Updated TOF distance: {self.tof_distance} mm")
+
+            #update pressure variables
+            air_averages = []
+            for i, reading in  enumerate (air_pressure):                
+                self.airABC_moving_avg_list[i]. add_value(reading)
+                air_averages.append(self.airABC_moving_avg_list[i].get_average())            
+            self.air_averages = air_averages
+
+            self.get_logger().info("")
+            self.get_logger().info(f"Updated Air Pressure: {self.air_averages} hPa")
+
+            # Rotation axis and angle
+            axis, mag = axis_angle_rotation(self.air_averages)      # Response units in [radians]
+            self.get_logger().info(f"Rotation axis [deg]: {int(math.degrees(axis))}, Rotation angle [deg]: {int(math.degrees(mag))}") 
+
+            # Center of rotation
+            cr_x, cr_y = center_of_rotation(self.air_averages)      # Response units in [m]               
+            self.get_logger().info(f"Center of Rotation [m]: {cr_x}, {cr_y}")    
+
+            self.cr_x = cr_x
+            self.cr_y = cr_y
+            
+            angle = mag * self.KP
+
+            x_speed = angle * math.cos(axis)
+            y_speed = angle * math.sin(axis)
+            self.get_logger().info(f"Speeds: {round(x_speed,2)}, {round(y_speed,2)}")  
+
+            self.angular_speed_x = x_speed
+            self.angular_speed_y = y_speed
+
+            
+
+        except (IndexError, ValueError) as e:
+            self.get_logger().error(f"Error processing Sensor Data: {msg.data} | Exception: {str(e)}")
+
 
 
     def read_eef_pose(self, pose_msg):
