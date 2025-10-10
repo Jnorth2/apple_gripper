@@ -196,8 +196,14 @@ class GraspController(Node):
             Inputs - vacuum_status (bool): True turns the vacuum on, False turns it off
         """
         # build the request
-        request = GripperVacuum.Request()
-        request.set_vacuum = vacuum_status
+        
+        
+        if self.gripper_type == "finray":
+            request = SetBool.Request()
+            request.data = vacuum_status
+        else:
+            request = GripperVacuum.Request()
+            request.set_vacuum = vacuum_status
         # make the service call (asynchronously)
         self.vacuum_response = self.vacuum_service_client.call_async(request)
 
@@ -207,8 +213,12 @@ class GraspController(Node):
             Inputs - fingers_status (bool): True engages the fingers, False disengages
         """
         # build the request
-        request = GripperFingers.Request()
-        request.set_fingers = fingers_status
+        if self.gripper_type == "finray":
+            request = SetBool.Request()
+            request.data = fingers_status
+        else:
+            request = GripperFingers.Request()
+            request.set_fingers = fingers_status
         # make the service call (asynchronously)
         self.fingers_response = self.fingers_service_client.call_async(request)
     
