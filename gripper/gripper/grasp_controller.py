@@ -56,6 +56,8 @@ class GraspController(Node):
             self.finger_service = "/microROS/actuate_odrive"
             self.suction_valve_service = "/microROS/toggle_valve"
             self.sensor_topic = "microROS/sensor_data"
+            #Parameter
+            self.GRIPPER_HEIGHT = 0.26456 # [m] Distance form 'tool0' to the center of the gripper with same height as engaged suctino cups
         else:
             self.finger_service_type = GripperFingers
             self.valve_service_type = GripperVacuum
@@ -63,6 +65,8 @@ class GraspController(Node):
             self.suction_valve_service = "set_vacuum_status"
             self.tof_topic = "/gripper/distance"
             self.press_topic = "/gripper/pressure"
+            #Parameters
+            self.GRIPPER_HEIGHT = 0.19 # [m] Distance form 'tool0' to the center of the gripper with same height as engaged suctino cups
         self.get_logger().info(f"gripper type: {self.gripper_type}")
 
         #----------------------------------- ROS TOPICS ---------------------------------------#
@@ -106,7 +110,7 @@ class GraspController(Node):
         self.MAX_JOINT_SPEED = 2.0                  # Parameter to max out the joint speeds
         self.VACUUM_TRIGGER_DISTANCE = 100          # Distance to trigger vacuum during the approach
         self.ENGAGEMENT_THRESHOLD = 600             # Air pressure threshold to tell when a cup engaged
-        self.GRIPPER_HEIGHT = 0.19                  # [m] Distance form 'tool0' to the center of the gripper with same height as engaged suctino cups
+        #self.GRIPPER_HEIGHT = 0.19                  # [m] Distance form 'tool0' to the center of the gripper with same height as engaged suctino cups
         self.KP = self.MAX_JOINT_SPEED/800          # Proportional constant: converts max pressure error (1000-200 = 800)hPa to max joint speed rad/sec
 
         ### Tf2
