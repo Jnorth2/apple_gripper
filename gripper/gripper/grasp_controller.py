@@ -48,7 +48,11 @@ class GraspController(Node):
         r_callback_group = ReentrantCallbackGroup()
         #-------------------------------- Node Parameters -------------------------------------#
         self.declare_parameter("gripper_type", "old")
+        self.declare_parameter("grasp_strategy", "pressure") 
+        #The gripper type: old->alejo and finray. 
         self.gripper_type = self.get_parameter("gripper_type").get_parameter_value().string_value
+        #The grasp strategy: pressure->pressure servoing, time-> after set amount of time. 
+        self.grasp_strategy = self.get_parameter("grasp_strategy").get_parameter_value().string_value
 
         if self.gripper_type == "finray":
             self.finger_service_type = SetBool
@@ -57,7 +61,7 @@ class GraspController(Node):
             self.suction_valve_service = "/microROS/toggle_valve"
             self.sensor_topic = "microROS/sensor_data"
             #Parameter
-            self.GRIPPER_HEIGHT = 0.26456 # [m] Distance form 'tool0' to the center of the gripper with same height as engaged suctino cups
+            self.GRIPPER_HEIGHT = 0.243 # [m] Distance form 'tool0' to the center of the gripper with same height as engaged suctino cups
         else:
             self.finger_service_type = GripperFingers
             self.valve_service_type = GripperVacuum
@@ -68,6 +72,10 @@ class GraspController(Node):
             #Parameters
             self.GRIPPER_HEIGHT = 0.19 # [m] Distance form 'tool0' to the center of the gripper with same height as engaged suctino cups
         self.get_logger().info(f"gripper type: {self.gripper_type}")
+        self.get_logger().info(f"Grasp strategy: {self.grasp_strategy}")
+
+        if self.grasp_strategy == "pressure":
+            self.get_logger().info("In pressure")
 
         #----------------------------------- ROS TOPICS ---------------------------------------#
         # Publishers
@@ -112,13 +120,14 @@ class GraspController(Node):
         self.ENGAGEMENT_THRESHOLD = 600             # Air pressure threshold to tell when a cup engaged
         #self.GRIPPER_HEIGHT = 0.19                  # [m] Distance form 'tool0' to the center of the gripper with same height as engaged suctino cups
         self.KP = self.MAX_JOINT_SPEED/800          # Proportional constant: converts max pressure error (1000-200 = 800)hPa to max joint speed rad/sec
+        self.TIME_OUT = rclpy.duration.Duration(seconds=3.5)   # Time out for time based grasping strategy.
 
         ### Tf2
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         # Variables                          
-        self.rate = self.create_rate(0.5)
+        self.rate = self.create_rate(10)
         self.fingers_previous_action = "close"        
         # Instantiate classes        
         self.airABC_moving_avg_list = []
@@ -143,7 +152,9 @@ class GraspController(Node):
         self.running        = False
         self.move_flag      = False
         self.vacuum_flag    = False
+        self.start_time     = self.get_clock().now()
         self.state          = "approach"
+        self.start_timer    = False
         
 
      ## --- ROS SERVICES CALLBACKS (SERVER) ---
@@ -151,7 +162,10 @@ class GraspController(Node):
 
         self.get_logger().info("Activating grasping node")
         self.move_flag = True
-        self.running = True      
+        self.running = True     
+        self.vacuum_flag = False
+        self.start_timer = False
+ 
 
         try:
             while rclpy.ok() and self.move_flag:
@@ -170,8 +184,14 @@ class GraspController(Node):
             self.get_logger().info(f"Grasping apple. State: \033[33m{self.state}\033[0m")   
             self.send_fingers_request(True)
 
+            if self.grasp_strategy == "time":
+                self.start_timer = False
+                time.sleep(2)    
+                # self.get_logger().info(f"Starting Vacuum")
+                # self.send_vacuum_request(True)
+
             # TODO: this is for debugging, delete when done
-            time.sleep(4)    
+            time.sleep(4)
         
         return response
     
@@ -189,6 +209,9 @@ class GraspController(Node):
 
         # Turn Vacuum Off
         self.send_vacuum_request(False)
+
+        self.state = "approach"
+        self.vacuum_flag = False
 
         return response
 
@@ -237,6 +260,7 @@ class GraspController(Node):
         # msg.header.frame_id = "tool0"
 
         if self.running:
+            #self.get_logger().info("Running")
 
             thr = self.ENGAGEMENT_THRESHOLD
             scA = self.air_averages[0]
@@ -251,11 +275,41 @@ class GraspController(Node):
                 msg.twist.angular.y = 0.0
                 msg.twist.angular.z = 0.0
 
-                if self.tof_distance < self.VACUUM_TRIGGER_DISTANCE and not self.vacuum_flag:
+                #Need Some notion of distance moved and pose offset from apple 
+
+                #TODO add timeout?
+                if self.tof_distance < self.VACUUM_TRIGGER_DISTANCE and not self.start_timer and self.grasp_strategy == "time":
+                    self.start_time = self.get_clock().now()
+                    self.send_vacuum_request(True)
+                    self.start_timer = True
+                if self.start_timer:
+                    self.get_logger().info(f"Time Diff: {self.get_clock().now() - self.start_time}")
+                if self.start_timer and self.get_clock().now()- self.start_time > self.TIME_OUT and self.grasp_strategy == "time":
+                    msg.twist.linear.x = 0.0
+                    msg.twist.linear.y = 0.0
+                    msg.twist.linear.z = 0.0
+                    msg.twist.angular.x = 0.0
+                    msg.twist.angular.y = 0.0
+                    msg.twist.angular.z = 0.0
+                    self.get_logger().info("Stopped approach due to timeout")
+                    self.move_flag = False
+                if self.start_timer and (scA < thr or scB < thr or scC < thr) and self.grasp_strategy == "time":
+                    msg.twist.linear.x = 0.0
+                    msg.twist.linear.y = 0.0
+                    msg.twist.linear.z = 0.0
+                    msg.twist.angular.x = 0.0
+                    msg.twist.angular.y = 0.0
+                    msg.twist.angular.z = 0.0
+                    self.get_logger().info("Stopped approach due to engagement")
+                    self.move_flag = False
+
+
+                if (self.tof_distance < self.VACUUM_TRIGGER_DISTANCE and not self.vacuum_flag) and self.grasp_strategy == "pressure":
+                    self.get_logger().info("Turned on Vacuum")
                     self.send_vacuum_request(True)
                     self.vacuum_flag = True
 
-                if scA < thr or scB < thr or scC < thr:
+                if (scA < thr or scB < thr or scC < thr) and self.grasp_strategy == "pressure":
                     self.state = "servoing"
                     msg.twist.linear.x = 0.0
                     msg.twist.linear.y = 0.0
@@ -264,7 +318,9 @@ class GraspController(Node):
                     msg.twist.angular.y = 0.0
                     msg.twist.angular.z = 0.0
             
-            if self.state == "servoing":               
+            if self.state == "servoing" and self.grasp_strategy == "pressure":              
+
+                #TODO: Add backup for stoping servoing and just grasping apple.  
 
                 # TRANSFORMATION CHOICE 1 (frame_id = 'tool0')              
                 # 1 - Transform with rotation matrix from 'scup frame' into 'tool0 frame
@@ -288,8 +344,8 @@ class GraspController(Node):
                 msg.twist.angular.z = angular_velocities[2]  
 
             
-            # If all engaged, leave!!
-            if scA < thr and scB < thr and scC < thr:                
+            # If two engaged, leave!!
+            if ((scA < thr and scB < thr) or (scA < thr  and scC < thr) or (scB < thr  and scC < thr)) and self.grasp_strategy == "pressure":                
                 msg.twist.linear.x = 0.0
                 msg.twist.linear.y = 0.0
                 msg.twist.linear.z = 0.0
@@ -300,18 +356,18 @@ class GraspController(Node):
                 self.get_logger().info("All suction cups engaged")
                 self.move_flag = False
             
-        else:                              
-                msg.twist.linear.x = 0.0
-                msg.twist.linear.y = 0.0
-                msg.twist.linear.z = 0.0
-                msg.twist.angular.x = 0.0
-                msg.twist.angular.y = 0.0
-                msg.twist.angular.z = 0.0
+        # else:                              
+        #         msg.twist.linear.x = 0.0
+        #         msg.twist.linear.y = 0.0
+        #         msg.twist.linear.z = 0.0
+        #         msg.twist.angular.x = 0.0
+        #         msg.twist.angular.y = 0.0
+        #         msg.twist.angular.z = 0.0
 
-                self.move_flag = False       
-
+        #         self.move_flag = False       
+            #self.get_logger().info("Sending Stuff")
         # Publish Twist message
-        self.grasp_servo_publisher.publish(msg)
+            self.grasp_servo_publisher.publish(msg)
 
 
     ## --- FUNCTIONS TRIGGERED BY TOPIC SUBSCRIBERS
@@ -402,16 +458,16 @@ class GraspController(Node):
                 air_averages.append(self.airABC_moving_avg_list[i].get_average())            
             self.air_averages = air_averages
 
-            self.get_logger().info("")
-            self.get_logger().info(f"Updated Air Pressure: {self.air_averages} hPa")
+            #self.get_logger().info("")
+            #self.get_logger().info(f"Updated Air Pressure: {self.air_averages} hPa")
 
             # Rotation axis and angle
             axis, mag = axis_angle_rotation(self.air_averages)      # Response units in [radians]
-            self.get_logger().info(f"Rotation axis [deg]: {int(math.degrees(axis))}, Rotation angle [deg]: {int(math.degrees(mag))}") 
+            #self.get_logger().info(f"Rotation axis [deg]: {int(math.degrees(axis))}, Rotation angle [deg]: {int(math.degrees(mag))}") 
 
             # Center of rotation
             cr_x, cr_y = center_of_rotation(self.air_averages)      # Response units in [m]               
-            self.get_logger().info(f"Center of Rotation [m]: {cr_x}, {cr_y}")    
+            #self.get_logger().info(f"Center of Rotation [m]: {cr_x}, {cr_y}")    
 
             self.cr_x = cr_x
             self.cr_y = cr_y
@@ -420,7 +476,7 @@ class GraspController(Node):
 
             x_speed = angle * math.cos(axis)
             y_speed = angle * math.sin(axis)
-            self.get_logger().info(f"Speeds: {round(x_speed,2)}, {round(y_speed,2)}")  
+            #self.get_logger().info(f"Speeds: {round(x_speed,2)}, {round(y_speed,2)}")  
 
             self.angular_speed_x = x_speed
             self.angular_speed_y = y_speed

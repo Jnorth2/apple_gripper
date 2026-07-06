@@ -8,3 +8,6 @@
 *.xlsx
 *.avi
 *.pyc
+build
+install
+log
