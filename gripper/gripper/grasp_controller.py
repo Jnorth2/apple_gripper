@@ -61,7 +61,7 @@ class GraspController(Node):
             self.suction_valve_service = "/microROS/toggle_valve"
             self.sensor_topic = "microROS/sensor_data"
             #Parameter
-            self.GRIPPER_HEIGHT = 0.243 # [m] Distance form 'tool0' to the center of the gripper with same height as engaged suctino cups
+            self.GRIPPER_HEIGHT = 0.19 # [m] Distance form 'tool0' to the center of the gripper with same height as engaged suctino cups
         else:
             self.finger_service_type = GripperFingers
             self.valve_service_type = GripperVacuum
@@ -276,15 +276,13 @@ class GraspController(Node):
                 msg.twist.angular.z = 0.0
 
                 #Need Some notion of distance moved and pose offset from apple 
-
-                #TODO add timeout?
                 if self.tof_distance < self.VACUUM_TRIGGER_DISTANCE and not self.start_timer and self.grasp_strategy == "time":
                     self.start_time = self.get_clock().now()
                     self.send_vacuum_request(True)
                     self.start_timer = True
                 if self.start_timer:
                     self.get_logger().info(f"Time Diff: {self.get_clock().now() - self.start_time}")
-                if self.start_timer and self.get_clock().now()- self.start_time > self.TIME_OUT and self.grasp_strategy == "time":
+                if self.start_timer and self.get_clock().now()- self.start_time > self.TIME_OUT: #and self.grasp_strategy == "time":
                     msg.twist.linear.x = 0.0
                     msg.twist.linear.y = 0.0
                     msg.twist.linear.z = 0.0
@@ -303,10 +301,11 @@ class GraspController(Node):
                     self.get_logger().info("Stopped approach due to engagement")
                     self.move_flag = False
 
-
                 if (self.tof_distance < self.VACUUM_TRIGGER_DISTANCE and not self.vacuum_flag) and self.grasp_strategy == "pressure":
                     self.get_logger().info("Turned on Vacuum")
                     self.send_vacuum_request(True)
+                    self.start_time = self.get_clock().now()
+                    self.start_timer = True
                     self.vacuum_flag = True
 
                 if (scA < thr or scB < thr or scC < thr) and self.grasp_strategy == "pressure":
@@ -321,6 +320,7 @@ class GraspController(Node):
             if self.state == "servoing" and self.grasp_strategy == "pressure":              
 
                 #TODO: Add backup for stoping servoing and just grasping apple.  
+                #TODO: Make manipulability aware or timeout on servo?
 
                 # TRANSFORMATION CHOICE 1 (frame_id = 'tool0')              
                 # 1 - Transform with rotation matrix from 'scup frame' into 'tool0 frame
@@ -344,8 +344,8 @@ class GraspController(Node):
                 msg.twist.angular.z = angular_velocities[2]  
 
             
-            # If two engaged, leave!!
-            if ((scA < thr and scB < thr) or (scA < thr  and scC < thr) or (scB < thr  and scC < thr)) and self.grasp_strategy == "pressure":                
+            # Number of suction cups engaged before grasp
+            if ((scA < thr and scB < thr and scC < thr) or (scA < thr   and scB < thr and scC < thr)) and self.grasp_strategy == "pressure": #or (scB < thr  and scC < thr)) and self.grasp_strategy == "pressure":                
                 msg.twist.linear.x = 0.0
                 msg.twist.linear.y = 0.0
                 msg.twist.linear.z = 0.0
