@@ -19,6 +19,7 @@ from rclpy.executors import SingleThreadedExecutor
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 from ament_index_python.packages import get_package_share_directory
+from rclpy.action import ActionServer, ActionClient
 
 import tf2_geometry_msgs
 
@@ -36,6 +37,7 @@ from geometry_msgs.msg import Point
 from std_msgs.msg import Float64, Bool, String, Float32MultiArray, Int16MultiArray
 from visualization_msgs.msg import Marker, MarkerArray
 from gripper_msgs.srv import GripperVacuum, GripperFingers, GripperMultiplexer, SetArmGoal, GetArmPosition
+from gripper_msgs.action import GraspControl
 
 # Self developed 
 from air_functions import * 
@@ -109,6 +111,10 @@ class GraspController(Node):
             self.get_logger().info("Waiting for gripper finger server")
         
         self.get_logger().info("All services Available!")
+
+
+        #----------------------------------- ROS ACTIONS ----------------------------------#
+        self.grasp_action_server = ActionServer(self, GraspControl, 'grasp_apple', self.execute_grasp_callback, callback_group=r_callback_group, cancel_callback=self.cancel_grasp_callback)
         
         #----------------------------------- NODE PROPERTIES ----------------------------------#
         # Recurring method
@@ -165,7 +171,6 @@ class GraspController(Node):
         self.running = True     
         self.vacuum_flag = False
         self.start_timer = False
- 
 
         try:
             while rclpy.ok() and self.move_flag:
@@ -195,7 +200,83 @@ class GraspController(Node):
         
         return response
     
+    def execute_grasp_callback(self, goal_handle):
+        """
+        Action server callback to execute the grasping action.
+        """
+        self.get_logger().info("Executing grasp action")
+        self.move_flag = True
+        self.running = True     
+        self.vacuum_flag = False
+        self.start_timer = False
+        result = GraspControl.Result()
+        feedback_msg = GraspControl.Feedback()
+
+
+        try:
+            while rclpy.ok() and self.move_flag:
+                # Remain in this while loop until 'self.move_flag' is set off
+                self.get_logger().info(f"Grasping apple. State: \033[33m{self.state}\033[0m")  
+                feedback_msg.state = self.state
+                goal_handle.publish_feedback(feedback_msg) 
+                self.rate.sleep()                                          
+                
+        except Exception as e:
+            self.get_logger().error(f"Error during grasping: {str(e)}")
+            goal_handle.abort()
+            result.message = "Failed during grasp"
+            result.success = False
+            return result
+
+        finally:                      
+
+            self.move_flag = False
+            self.running = False
+
+            self.state = "deploying fingers"
+            self.get_logger().info(f"Grasping apple. State: \033[33m{self.state}\033[0m")   
+            self.send_fingers_request(True)
+
+            if self.grasp_strategy == "time":
+                self.start_timer = False
+                time.sleep(2)    
+                # self.get_logger().info(f"Starting Vacuum")
+                # self.send_vacuum_request(True)
+        goal_handle.succeed()
+        result.success = True
+        result.message = "Closed Grasp"
+        return result
     
+    def cancel_grasp_callback(self, goal_handle):
+        """
+        Action server callback to handle cancellation of the grasping action.
+        """
+        self.get_logger().info("Grasp action canceled")
+        self.move_flag = False
+        self.running = False
+        self.vacuum_flag = False
+        self.start_timer = False
+        
+        #Ensure motion is stopped
+        msg = TwistStamped()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = "gripper_scups_link"
+        msg.twist.linear.x = 0.0
+        msg.twist.linear.y = 0.0
+        msg.twist.linear.z = 0.0
+        msg.twist.angular.x = 0.0
+        msg.twist.angular.y = 0.0
+        msg.twist.angular.z = 0.0
+
+        #Send an open gripper and vacuum off?
+
+        self.grasp_servo_publisher.publish(msg)
+
+        # Optionally, you can also reset the state or perform any cleanup here.
+        self.state = "approach"  # Reset state to approach or any other appropriate state.
+
+        goal_handle.canceled()
+        return GraspControl.Result()
 
     def release_apple_callback(self, request, response):
         """

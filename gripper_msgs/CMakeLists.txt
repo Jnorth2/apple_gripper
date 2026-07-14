@@ -20,6 +20,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/MoveArm.srv"
   "srv/SetArmGoal.srv"
   "srv/GetArmPosition.srv"
+  "action/GraspControl.action"
   DEPENDENCIES std_msgs geometry_msgs
   )
 
