@@ -19,7 +19,7 @@ from rclpy.executors import SingleThreadedExecutor
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 from ament_index_python.packages import get_package_share_directory
-from rclpy.action import ActionServer, ActionClient
+from rclpy.action import ActionServer, ActionClient, CancelResponse
 
 import tf2_geometry_msgs
 
@@ -215,68 +215,68 @@ class GraspController(Node):
 
         try:
             while rclpy.ok() and self.move_flag:
+                if goal_handle.is_cancel_requested:
+                    self.move_flag = False
+                    self.running = False
+                    self.vacuum_flag = False
+                    self.start_timer = False
+                    self._publish_stop_twist()
+                    self.state = "approach"
+                    goal_handle.canceled()
+                    result.success = False
+                    result.message = "Grasp canceled"
+                    return result
+
                 # Remain in this while loop until 'self.move_flag' is set off
-                self.get_logger().info(f"Grasping apple. State: \033[33m{self.state}\033[0m")  
+                self.get_logger().info(f"Grasping apple. State: \033[33m{self.state}\033[0m")
                 feedback_msg.state = self.state
-                goal_handle.publish_feedback(feedback_msg) 
-                self.rate.sleep()                                          
-                
+                goal_handle.publish_feedback(feedback_msg)
+                self.rate.sleep()
+
         except Exception as e:
             self.get_logger().error(f"Error during grasping: {str(e)}")
+            self.move_flag = False
+            self.running = False
             goal_handle.abort()
             result.message = "Failed during grasp"
             result.success = False
             return result
 
-        finally:                      
-
+        finally:
             self.move_flag = False
             self.running = False
 
-            self.state = "deploying fingers"
-            self.get_logger().info(f"Grasping apple. State: \033[33m{self.state}\033[0m")   
-            self.send_fingers_request(True)
+        self.state = "deploying fingers"
+        self.get_logger().info(f"Grasping apple. State: \033[33m{self.state}\033[0m")
+        self.send_fingers_request(True)
 
-            if self.grasp_strategy == "time":
-                self.start_timer = False
-                time.sleep(2)    
-                # self.get_logger().info(f"Starting Vacuum")
-                # self.send_vacuum_request(True)
+        if self.grasp_strategy == "time":
+            self.start_timer = False
+            time.sleep(2)
+            # self.get_logger().info(f"Starting Vacuum")
+            # self.send_vacuum_request(True)
+
         goal_handle.succeed()
         result.success = True
         result.message = "Closed Grasp"
         return result
-    
-    def cancel_grasp_callback(self, goal_handle):
-        """
-        Action server callback to handle cancellation of the grasping action.
-        """
-        self.get_logger().info("Grasp action canceled")
-        self.move_flag = False
-        self.running = False
-        self.vacuum_flag = False
-        self.start_timer = False
-        
-        #Ensure motion is stopped
+
+    def _publish_stop_twist(self):
         msg = TwistStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = "gripper_scups_link"
-        msg.twist.linear.x = 0.0
-        msg.twist.linear.y = 0.0
-        msg.twist.linear.z = 0.0
-        msg.twist.angular.x = 0.0
-        msg.twist.angular.y = 0.0
-        msg.twist.angular.z = 0.0
-
-        #Send an open gripper and vacuum off?
-
         self.grasp_servo_publisher.publish(msg)
 
-        # Optionally, you can also reset the state or perform any cleanup here.
-        self.state = "approach"  # Reset state to approach or any other appropriate state.
-
-        goal_handle.canceled()
-        return GraspControl.Result()
+    def cancel_grasp_callback(self, goal_handle):
+        """
+        Action server cancel callback. Must return a CancelResponse -- the
+        actual EXECUTING -> CANCELED transition happens in
+        execute_grasp_callback, since goal_handle.canceled() is only a valid
+        call from the CANCELING state the framework moves to after this
+        returns ACCEPT.
+        """
+        self.get_logger().info("Grasp action cancel requested")
+        return CancelResponse.ACCEPT
 
     def release_apple_callback(self, request, response):
         """
