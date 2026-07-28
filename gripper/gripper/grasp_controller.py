@@ -249,7 +249,7 @@ class GraspController(Node):
         self.state = "deploying fingers"
         self.get_logger().info(f"Grasping apple. State: \033[33m{self.state}\033[0m")
         self.send_fingers_request(True)
-
+        time.sleep(2) #wait for fingers to actuate
         if self.grasp_strategy == "time":
             self.start_timer = False
             time.sleep(2)
@@ -268,13 +268,6 @@ class GraspController(Node):
         self.grasp_servo_publisher.publish(msg)
 
     def cancel_grasp_callback(self, goal_handle):
-        """
-        Action server cancel callback. Must return a CancelResponse -- the
-        actual EXECUTING -> CANCELED transition happens in
-        execute_grasp_callback, since goal_handle.canceled() is only a valid
-        call from the CANCELING state the framework moves to after this
-        returns ACCEPT.
-        """
         self.get_logger().info("Grasp action cancel requested")
         return CancelResponse.ACCEPT
 
