@@ -46,6 +46,127 @@ def axis_of_rotation(sum_vector):
 
     return theta
 
+def wedge_of_axes(air_pressures, d_theta = 1, wedge_angle = 60, gripper_height = 0.19):
+    """
+    This function optains the wedge of possible axis to rotate the gipper which will rotate towards engaging 
+    at least one more suction cup. 
+
+    The width of the wedge is determined by the number of suction cups engaged. For starters this will be a 
+    margin around the best axis of rotation, however it could also be the biaxis between two suction cups if 
+    only one is engaged, or the axis at one suction if two are engaged. We will provide a wedge of plus or 
+    minus 60 degrees for when one suction cup is engaged, and a wedge of plus or minus 30 degrees when two 
+    suction cups are engaged. 
+
+    Parameters
+    ----------
+    air_pressures : list
+        A list containing the air pressure readings from the suction cups.
+    d_theta : float
+        Angular spacing between consecutive axes in the wedge [deg].
+    wedge_angle : float
+        The total angle of the wedge [deg].
+    gripper_height : float
+        Distance from 'tool0' to the plane of the suction cups [m] (GRIPPER_HEIGHT in grasp_controller).
+
+
+    Returns
+    -------
+    wedge : numpy array
+        A 2D array containing a descrete wedge of unit twists.
+        Shape (N, 6): rows [vx, vy, vz, wx, wy, wz] = [v; w], the twist of 'tool0' for a rotation of
+        1 rad/s about each candidate axis through the center of rotation (same pivot as
+        center_of_rotation). Components are expressed in the 'gripper_scups_link' axes, so rotate both
+        v and w into the Jacobian's frame before use. Ordered from -half_width to +half_width, so the
+        best axis is the middle row. Shape (0, 6) when zero or all three suction cups are engaged
+        (no wedge defined).
+
+    """
+    ENGAGE_THRESHOLD = 400      # Engagement reference [HPa]
+    #get best rotation axis
+    vsum = net_air_pressure(air_pressures)
+    axis = axis_of_rotation(vsum)
+
+    # Wedge margin
+    n_engaged = sum(p < ENGAGE_THRESHOLD for p in air_pressures)
+    if n_engaged == 1:
+        half_width = np.radians(wedge_angle)
+    elif n_engaged == 2:
+        half_width = np.radians(wedge_angle / 2)
+    else:
+        return np.empty((0, 6))
+
+    # Discretize the wedge of axes
+    n_axes = int(round(2 * half_width / np.radians(d_theta))) + 1
+    angles = axis + np.linspace(-half_width, half_width, n_axes)
+
+    # Unit angular velocities
+    w = np.column_stack((np.cos(angles), np.sin(angles), np.zeros(n_axes)))
+
+    # Linear velocity so the center of rotation stays fixed
+    cr_x, cr_y = center_of_rotation(air_pressures)
+    position_vector = np.array([-cr_x, -cr_y, -gripper_height])
+    v = np.cross(w, position_vector)
+
+    wedge = np.hstack((v, w))
+
+    return wedge
+
+def weight_wedge_pressure(air_pressures, wedge, weight_type = 'linear', scale = None):
+    """
+    This function weights the wedge of possible axes by the best axis of rotation to engage the remaining
+    suction cups.
+
+    Parameters
+    ----------
+    air_pressures : list
+        A list containing the air pressure readings from the suction cups.
+    wedge : numpy array
+        An array containing the descretized wedge of unit twists [Nx6].
+    weight_type : str
+        'linear'   : w = max(0, 1 - |d| / scale)        (tent, like -abs())
+        'gaussian' : w = exp(-d^2 / (2 * scale^2))      (scale = standard deviation)
+        'laplace'  : w = exp(-|d| / scale)              (scale = diversity b)
+        where d is the angle between each axis and the best axis.
+    scale : float or None
+        Spread of the weighting [deg]. If None it is taken from the wedge half-width: linear reaches 0 at
+        the wedge edges, gaussian and laplace use half-width / 2 (both give exp(-2) ~ 0.14 at the edges).
+
+    Returns
+    -------
+    weights : numpy array
+        A 1D array contatining the weights for each axis in the wedge.
+        Unit weights in [0, 1], equal to 1 at the best axis, so a gain can be applied later.
+        Empty when the wedge is empty.
+    """
+    if len(wedge) == 0:
+        return np.empty(0)
+
+    # Best axis of rotation
+    vsum = net_air_pressure(air_pressures)
+    axis = axis_of_rotation(vsum)
+
+    # Angle of each axis in the wedge from the best axis, wrapped to [-pi, pi)
+    angles = np.arctan2(wedge[:, 4], wedge[:, 3])
+    d = np.abs((angles - axis + np.pi) % (2 * np.pi) - np.pi)
+
+    # Spread of the weighting
+    half_width = np.max(d)
+    if scale is None:
+        scale = half_width if weight_type == 'linear' else half_width / 2
+    else:
+        scale = np.radians(scale)
+
+    if weight_type == 'linear':
+        weights = np.clip(1 - d / scale, 0, 1)
+    elif weight_type == 'gaussian':
+        weights = np.exp(-d**2 / (2 * scale**2))
+    elif weight_type == 'laplace':
+        weights = np.exp(-d / scale)
+    else:
+        raise ValueError(f"weight_type must be 'linear', 'gaussian' or 'laplace', got '{weight_type}'")
+
+    return weights
+
 
 def axis_angle_rotation(air_pressures):
     """This method obtains an axis-angle representation from the three air-pressure readings
