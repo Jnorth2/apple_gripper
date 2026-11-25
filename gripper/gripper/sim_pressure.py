@@ -89,10 +89,6 @@ def compute_pressure(dist_to_surface: float,
     return int(round(noisy))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Node
-# ─────────────────────────────────────────────────────────────────────────────
-
 class FakePressureNode(Node):
     """
     Waits for a /fake_pressure/start service call, then publishes
