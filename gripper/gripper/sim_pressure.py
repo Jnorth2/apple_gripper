@@ -39,13 +39,7 @@ from rclpy.duration import Duration
 from std_msgs.msg import Int16MultiArray, MultiArrayDimension, MultiArrayLayout
 from std_srvs.srv import Trigger
 
-from tf2_ros import (
-    Buffer,
-    TransformListener,
-    LookupException,
-    ExtrapolationException,
-    ConnectivityException,
-)
+from tf2_ros import (Buffer,TransformListener,LookupException,ExtrapolationException,ConnectivityException)
 
 _rng_a = random.Random(11)
 _rng_b = random.Random(22)
