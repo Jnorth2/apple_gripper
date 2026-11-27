@@ -41,6 +41,10 @@ from gripper_msgs.action import GraspControl
 
 # Self developed 
 from air_functions import * 
+try:
+    from avf_scene import AVFScene
+except ImportError:
+    from gripper.avf_scene import AVFScene
 
 class GraspController(Node):
     def __init__(self):
@@ -131,6 +135,26 @@ class GraspController(Node):
         ### Tf2
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
+
+        ### Artificial vector field (trellis collision weights for the wedge of axes)
+        # Only provides weights via avf_collision_weights(); it does not change the twist.
+        # Choosing the move from the pressure / collision / manipulability weights is
+        # up to the control policy.
+        self.declare_parameter("use_avf", True)
+        self.declare_parameter("avf_planning_frame", "base_link")
+        self.declare_parameter("avf_step_deg", 5.0)             # look-ahead rotation
+        self.declare_parameter("avf_d_safe", 0.02)              # [m] closest allowed gap
+        self.declare_parameter("avf_length_scale", 0.03)        # [m] how fast weight recovers
+        self.declare_parameter("avf_ignore_object_ids", [""])
+        self.use_avf = self.get_parameter("use_avf").value
+        self.avf_scene = None
+        if self.use_avf:
+            self.avf_scene = AVFScene(
+                self, self.tf_buffer,
+                planning_frame=self.get_parameter("avf_planning_frame").value,
+                ignore_object_ids=[s for s in self.get_parameter("avf_ignore_object_ids").value if s],
+                callback_group=r_callback_group)
+            self.get_logger().info("AVF enabled: collision weights available for the wedge of axes")
 
         # Variables                          
         self.rate = self.create_rate(10)
@@ -442,6 +466,40 @@ class GraspController(Node):
             #self.get_logger().info("Sending Stuff")
         # Publish Twist message
             self.grasp_servo_publisher.publish(msg)
+
+
+    def avf_collision_weights(self, wedge):
+        """AVF collision weight for each axis in the wedge.
+
+        wedge: (N, 6) unit twists from wedge_of_axes() ('gripper_scups_link' axes, about tool0).
+        Returns (N,) weights in [0, 1], same row order as the wedge: 1 = clear of the trellis,
+        0 = this axis would bring the gripper / arm within avf_d_safe. All ones when the AVF
+        is off, no trellis is near, or TF is not ready yet (nothing to avoid / can't tell).
+        Does not choose or change the twist.
+        """
+        n = len(wedge)
+        ones = np.ones(n)
+        if n == 0 or self.avf_scene is None or not self.avf_scene.has_obstacles():
+            return ones
+        ctx = self.avf_scene.context()
+        if ctx is None:
+            self.get_logger().warn("AVF: TF not ready, collision weights not applied",
+                                   throttle_duration_sec=5.0)
+            return ones
+        if not ctx.obstacles:
+            return ones
+        g = self.get_parameter
+        score = weight_wedge_collision(
+            wedge, ctx.R_wedge, ctx.points, ctx.maps, ctx.obstacles, ctx.radii,
+            d_safe=g("avf_d_safe").value, step=math.radians(g("avf_step_deg").value),
+            length_scale=g("avf_length_scale").value)
+        if not score.feasible.all():
+            k = int(np.argmin(score.min_gap))
+            where = ctx.names[score.closest_point[k]] if score.closest_point[k] >= 0 else "?"
+            self.get_logger().info(
+                f"AVF: {int((~score.feasible).sum())}/{n} axes blocked by the trellis "
+                f"(closest {score.min_gap[k]*100:.1f} cm at {where})", throttle_duration_sec=1.0)
+        return score.weights
 
 
     ## --- FUNCTIONS TRIGGERED BY TOPIC SUBSCRIBERS

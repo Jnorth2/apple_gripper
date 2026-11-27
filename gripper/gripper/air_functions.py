@@ -1,5 +1,11 @@
 import numpy as np
 
+# Artificial vector field (collision scoring of the wedge), see avf.py
+try:
+    from avf import AVFParams, rotate_twists, score_wedge_collision
+except ImportError:
+    from gripper.avf import AVFParams, rotate_twists, score_wedge_collision
+
 def net_air_pressure(air_pressures):
     """
     This method takes the pressure readings, assigns them to the air-pressure unit vector and
@@ -239,6 +245,40 @@ def center_of_rotation(air_pressures):
 
     return round(x, 4), round(y, 4)     # Units in [m]
 
+
+
+def weight_wedge_collision(wedge, R_wedge, points, point_maps, obstacles, point_radii=None,
+                           d_safe=0.02, step=np.radians(5.0), n_substeps=3,
+                           length_scale=0.03, ignore_names=()):
+    """
+    Collision weight for each axis in the wedge (artificial vector field part).
+
+    Each candidate twist is stepped forward a small amount (`step` rad of rotation) and the
+    smallest gap between the control points (gripper, wrist, arm links) and the trellis is
+    found. The weight is 1 when clear and drops exponentially to 0 at d_safe:
+        weight = 1 - exp(-(gap - d_safe) / length_scale),   0 if gap <= d_safe
+
+    Parameters
+    ----------
+    wedge : numpy array
+        (N, 6) unit twists from wedge_of_axes(), in 'gripper_scups_link' axes.
+    R_wedge : 3x3 array or scipy Rotation
+        Rotation from 'gripper_scups_link' to the planning frame.
+    points, point_maps, point_radii :
+        Control points in the planning frame and their 3x6 twist->velocity maps
+        (see avf_scene.AVFScene.context()).
+    obstacles : list of avf.Cylinder
+        Trellis / tree-template primitives in the planning frame.
+
+    Returns
+    -------
+    score : avf.WedgeCollisionScore
+        .weights (N,) in [0, 1], same row order as the wedge, plus .min_gap, .feasible,
+        .cost and .closest_point for debugging.
+    """
+    params = AVFParams(d_safe=d_safe, ignore_names=list(ignore_names))
+    return score_wedge_collision(rotate_twists(wedge, R_wedge), points, point_maps, obstacles,
+                                 params, point_radii, step, n_substeps, length_scale)
 
 
 def main():

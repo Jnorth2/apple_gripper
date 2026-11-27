@@ -46,6 +46,7 @@ install(PROGRAMS
   gripper/user.py
   gripper/suction_gripper.py
   gripper/arm_control.py
+  gripper/avf_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
